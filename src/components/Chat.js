@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchChat, sendMessage, deleteMessage, editMessage, getFileUrl, deleteFile, initSocket, getSocket } from '../api';
 
-// Componente de Chat con control de acceso para características administrativas
 function Chat({ token, user }) {
-  // Estados básicos
   const [mensajes, setMensajes] = useState([]);
   const [mensajeTexto, setMensajeTexto] = useState('');
   const [archivos, setArchivos] = useState([]);
@@ -20,7 +18,6 @@ function Chat({ token, user }) {
   const [scrollAutomatico, setScrollAutomatico] = useState(true);
   const [historialEdiciones, setHistorialEdiciones] = useState({});
   
-  // Referencias
   const scrollRef = useRef(null);
   const cargandoRef = useRef(false);
   const socketRef = useRef(null);
@@ -29,79 +26,78 @@ function Chat({ token, user }) {
   const ultimaAlturaScroll = useRef(0);
   const tooltipRef = useRef(null);
 
-  // Verificar si el usuario tiene permisos de administrador
   const esAdministrador = () => {
     return user && (user.rol === 'admin' || user.rol === 'supervisor' || user.rol === 'administrador');
   };
 
-  // Cargar mensajes y configurar socket
+  // Memoized cargarMensajes para ser dependencia de useEffect
+  const cargarMensajes = useCallback(async (silencioso = false) => {
+    if (cargandoRef.current) return;
+    cargandoRef.current = true;
+    if (!silencioso) setCargando(true);
+    try {
+      const data = await fetchChat(token);
+      if (Array.isArray(data)) {
+        setMensajesRaw(data);
+        const mensajesOrdenados = [...data].sort((a, b) => 
+          new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+        );
+        setMensajes(mensajesOrdenados);
+        setUltimaActualizacion(new Date().toLocaleTimeString());
+      } else if (data.error && !silencioso) {
+        setError(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      if (!silencioso) {
+        setError(`Error al cargar mensajes: ${err.message}`);
+      }
+    } finally {
+      if (!silencioso) setCargando(false);
+      cargandoRef.current = false;
+    }
+  }, [token]);
+
   useEffect(() => {
-    // Cargar mensajes iniciales
     cargarMensajes();
-    
-    // Configurar actualizaciones periódicas (cada 2.5 segundos)
     const intervalId = setInterval(() => {
       if (!cargandoRef.current) {
-        cargarMensajes(true); // silencioso
+        cargarMensajes(true);
       }
     }, 2500);
-    
-    // Configurar socket para actualizaciones en tiempo real
+
     const socket = getSocket() || initSocket(token);
     if (socket) {
       socketRef.current = socket;
       setConectado(socket.connected);
-      
-      // Eventos de conexión
-      socket.on('connect', () => {
-        console.log("Socket conectado");
-        setConectado(true);
-      });
-      
-      socket.on('disconnect', () => {
-        console.log("Socket desconectado");
-        setConectado(false);
-      });
-      
-      // Evento de nuevo mensaje
+
+      socket.on('connect', () => setConectado(true));
+      socket.on('disconnect', () => setConectado(false));
       socket.on('nuevo-mensaje', () => {
-        console.log("Evento nuevo-mensaje recibido");
-        
-        // Programar actualización con un pequeño retraso
         if (actualizacionProgramadaRef.current) {
           clearTimeout(actualizacionProgramadaRef.current);
         }
-        
         actualizacionProgramadaRef.current = setTimeout(() => {
           cargarMensajes(true);
         }, 300);
       });
-      
-      // Eventos de cambios en mensajes
       socket.on('mensaje-eliminado', () => cargarMensajes(true));
       socket.on('mensaje-editado', () => cargarMensajes(true));
     }
-    
-    // Verificar estado de conexión periódicamente
+
     const checkConnectionId = setInterval(() => {
       const socket = getSocket();
-      if (socket) {
-        setConectado(socket.connected);
-      }
+      if (socket) setConectado(socket.connected);
     }, 3000);
 
-    // Cargar el historial de ediciones desde localStorage al iniciar
     const historialGuardado = localStorage.getItem('historial_ediciones');
     if (historialGuardado) {
       try {
         setHistorialEdiciones(JSON.parse(historialGuardado));
       } catch (err) {
-        console.error("Error al cargar historial de ediciones:", err);
         localStorage.removeItem('historial_ediciones');
       }
     }
-    
-    // Limpiar
+
     return () => {
       clearInterval(intervalId);
       clearInterval(checkConnectionId);
@@ -109,129 +105,51 @@ function Chat({ token, user }) {
         clearTimeout(actualizacionProgramadaRef.current);
       }
     };
-  }, [token]);
+  }, [token, cargarMensajes]);
 
-  // Detectar cuando el usuario hace scroll manualmente
   useEffect(() => {
     if (!scrollRef.current) return;
-    
     const chatContainer = scrollRef.current;
-    
-    // Función para detectar scroll manual
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = chatContainer;
       const estaEnElFondo = Math.abs(scrollHeight - clientHeight - scrollTop) < 20;
-      
-      // Solo cambiar scrollAutomatico si hay un cambio real
       if (estaEnElFondo !== scrollAutomatico) {
         setScrollAutomatico(estaEnElFondo);
       }
-      
       ultimaAlturaScroll.current = scrollTop;
       usuarioScrolleando.current = true;
-      
-      // Resetear la bandera después de un tiempo
-      setTimeout(() => {
-        usuarioScrolleando.current = false;
-      }, 100);
+      setTimeout(() => { usuarioScrolleando.current = false; }, 100);
     };
-    
     chatContainer.addEventListener('scroll', handleScroll);
     return () => chatContainer.removeEventListener('scroll', handleScroll);
   }, [scrollAutomatico]);
 
-  // Control de scroll mejorado para nuevos mensajes
   useEffect(() => {
     if (!scrollRef.current || mensajes.length === 0) return;
-    
-    // Solo hacer scroll automático si:
-    // 1. El usuario no está haciendo scroll activamente
-    // 2. Ya estamos al final del chat O está configurado el scroll automático
     if (!usuarioScrolleando.current && scrollAutomatico) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [mensajes, scrollAutomatico]);
 
-  // Cargar mensajes desde la API
-  const cargarMensajes = async (silencioso = false) => {
-    // Prevenir múltiples solicitudes simultáneas
-    if (cargandoRef.current) return;
-    cargandoRef.current = true;
-    
-    if (!silencioso) setCargando(true);
-    
-    try {
-      console.log("Solicitando mensajes...");
-      const data = await fetchChat(token);
-      
-      if (Array.isArray(data)) {
-        console.log(`Recibidos ${data.length} mensajes de la API`);
-        
-        // Guardar datos crudos para diagnóstico
-        setMensajesRaw(data);
-        
-        // Ordenar mensajes por fecha
-        const mensajesOrdenados = [...data].sort((a, b) => 
-          new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-        );
-        
-        // IMPORTANTE: No filtrar mensajes, mostrar todos sin excepción
-        console.log(`Mostrando ${mensajesOrdenados.length} mensajes ordenados`);
-        
-        // Actualizar estado
-        setMensajes(mensajesOrdenados);
-        setUltimaActualizacion(new Date().toLocaleTimeString());
-      } else if (data.error && !silencioso) {
-        console.error("Error en respuesta:", data);
-        setError(`Error: ${data.error}`);
-      }
-    } catch (err) {
-      if (!silencioso) {
-        console.error("Error cargando mensajes:", err);
-        setError(`Error al cargar mensajes: ${err.message}`);
-      }
-    } finally {
-      if (!silencioso) setCargando(false);
-      cargandoRef.current = false;
-    }
-  };
-
-  // Agrupar mensajes con lógica ultra estricta (casi sin agrupación)
   const agruparMensajes = () => {
     if (!mensajes.length) return [];
-    
-    // En modo diagnóstico, no agrupar nada
     if (modoDiagnostico) {
       return mensajes.map(msg => [msg]);
     }
-    
-    // SOLUCIÓN FINAL: Casi no agrupar mensajes
-    // Por defecto, mostrar cada mensaje individualmente excepto en casos muy específicos
-    
     const grupos = [];
     let grupoActual = [mensajes[0]];
-    
-    // Ventana de tiempo MUY reducida (1 segundo)
     const VENTANA_TIEMPO_MS = 1000;
-    
     for (let i = 1; i < mensajes.length; i++) {
       const mensajeActual = mensajes[i];
       const mensajeAnterior = mensajes[i-1];
-      
       const mismoAutor = mensajeActual.de_usuario === mensajeAnterior.de_usuario;
       const tiempoCercano = Math.abs(
         new Date(mensajeActual.fecha).getTime() - 
         new Date(mensajeAnterior.fecha).getTime()
       ) < VENTANA_TIEMPO_MS;
-      
-      // SÓLO agrupar mensajes en estas condiciones específicas:
-      // 1. Es el mismo autor y están MUY cercanos en tiempo (menos de 1 segundo)
-      // 2. Y uno de los mensajes NO tiene texto pero tiene archivo (adjunto de archivo)
       const esArchivoSinTexto = 
         (mensajeActual.archivo_nombre && (!mensajeActual.mensaje || mensajeActual.mensaje.trim() === '')) ||
         (mensajeAnterior.archivo_nombre && (!mensajeAnterior.mensaje || mensajeAnterior.mensaje.trim() === ''));
-      
-      // Condición ultra estricta para agrupar - casi nunca se cumplirá para mensajes de texto
       if (mismoAutor && tiempoCercano && esArchivoSinTexto) {
         grupoActual.push(mensajeActual);
       } else {
@@ -239,63 +157,41 @@ function Chat({ token, user }) {
         grupoActual = [mensajeActual];
       }
     }
-    
-    // Añadir el último grupo
     grupos.push(grupoActual);
-    
     return grupos;
   };
 
-  // Enviar mensaje
   const enviarMensaje = async (e) => {
     e.preventDefault();
-    
     const texto = mensajeTexto.trim();
     if (!texto && archivos.length === 0) return;
-    
     setEnviando(true);
-    
     try {
-      console.log(`Enviando mensaje "${texto}" con ${archivos.length} archivos`);
       const resultado = await sendMessage(texto, token, archivos);
-      
       if (resultado && resultado.error) {
-        console.error("Error al enviar:", resultado.error);
         setError(`Error al enviar: ${resultado.error}`);
       } else {
-        // Limpiar formulario
         setMensajeTexto('');
         setArchivos([]);
-        
-        // Limpiar input de archivos
         const fileInput = document.getElementById('fileInput');
         if (fileInput) fileInput.value = '';
-        
-        // Reactivar scroll automático al enviar un mensaje
         setScrollAutomatico(true);
-        
-        // Recargar mensajes después de un breve retraso
         setTimeout(() => cargarMensajes(), 500);
       }
     } catch (err) {
-      console.error("Error en enviarMensaje:", err);
       setError(`Error al enviar: ${err.message}`);
     } finally {
       setEnviando(false);
     }
   };
 
-  // Eliminar mensaje
   const eliminarMensaje = async (id) => {
     if (!window.confirm('¿Seguro que deseas eliminar este mensaje?')) return;
-    
     try {
       const resultado = await deleteMessage(id, token);
-      
       if (resultado && resultado.error) {
         setError(`Error al eliminar: ${resultado.error}`);
       } else {
-        // Eliminar localmente y recargar para confirmar
         setMensajes(prev => prev.filter(m => m.id !== id));
         setTimeout(() => cargarMensajes(true), 500);
       }
@@ -304,17 +200,13 @@ function Chat({ token, user }) {
     }
   };
 
-  // Eliminar archivo
   const eliminarArchivo = async (id) => {
     if (!window.confirm('¿Seguro que deseas eliminar este archivo?')) return;
-    
     try {
       const resultado = await deleteFile(id, token);
-      
       if (resultado && resultado.error) {
         setError(`Error al eliminar archivo: ${resultado.error}`);
       } else {
-        // Recargar mensajes después de eliminar
         setTimeout(() => cargarMensajes(), 500);
       }
     } catch (err) {
@@ -322,29 +214,19 @@ function Chat({ token, user }) {
     }
   };
 
-  // Eliminar todos los archivos de un grupo
   const eliminarTodosArchivos = async (archivos) => {
     if (!window.confirm(`¿Seguro que deseas eliminar todos los archivos (${archivos.length})?`)) return;
-    
     setCargando(true);
     let errores = 0;
-    
     try {
-      // Eliminar archivos uno por uno
       for (const archivo of archivos) {
         try {
           await deleteFile(archivo.mensaje_id, token);
         } catch (err) {
-          console.error(`Error eliminando archivo ${archivo.id}:`, err);
           errores++;
         }
       }
-      
-      if (errores > 0) {
-        setError(`Hubo problemas al eliminar ${errores} archivos.`);
-      }
-      
-      // Recargar mensajes después de eliminar
+      if (errores > 0) setError(`Hubo problemas al eliminar ${errores} archivos.`);
       setTimeout(() => cargarMensajes(), 500);
     } catch (err) {
       setError(`Error general: ${err.message}`);
@@ -353,54 +235,38 @@ function Chat({ token, user }) {
     }
   };
 
-  // Iniciar edición de mensaje
   const iniciarEdicion = (mensaje) => {
     setEditando(mensaje.id);
     setEditTexto(mensaje.mensaje || '');
   };
 
-  // Guardar mensaje editado
   const guardarEdicion = async () => {
     if (!editTexto.trim()) return;
-    
     try {
-      // Buscar el mensaje original para guardar su texto antes de editar
       const mensajeOriginal = mensajes.find(m => m.id === editando);
       if (!mensajeOriginal) return;
-      
       const resultado = await editMessage(editando, editTexto, token);
-      
       if (resultado && resultado.error) {
         setError(`Error al editar: ${resultado.error}`);
       } else {
-        // Guardar historial de edición
         const nuevaEdicion = {
           textoOriginal: mensajeOriginal.mensaje || '',
           textoEditado: editTexto,
           fechaEdicion: new Date().toISOString(),
           editadoPor: user.id
         };
-        
         const nuevoHistorial = {
           ...historialEdiciones,
           [editando]: nuevaEdicion
         };
-        
-        // Actualizar el estado y guardar en localStorage
         setHistorialEdiciones(nuevoHistorial);
         localStorage.setItem('historial_ediciones', JSON.stringify(nuevoHistorial));
-        
-        // Actualizar localmente
         setMensajes(prev => 
           prev.map(m => 
             m.id === editando ? {...m, mensaje: editTexto} : m
           )
         );
-        
-        // Recargar para confirmar
         setTimeout(() => cargarMensajes(true), 500);
-        
-        // Salir del modo edición
         cancelarEdicion();
       }
     } catch (err) {
@@ -408,17 +274,14 @@ function Chat({ token, user }) {
     }
   };
 
-  // Cancelar edición
   const cancelarEdicion = () => {
     setEditando(null);
     setEditTexto('');
   };
 
-  // Mostrar tooltip personalizado con el texto original
   const mostrarTooltip = (e, mensajeId) => {
     const edicion = historialEdiciones[mensajeId];
     if (!edicion) return;
-    
     const tooltip = document.createElement('div');
     tooltip.className = 'mensaje-tooltip';
     tooltip.innerHTML = `
@@ -436,24 +299,17 @@ function Chat({ token, user }) {
         <div style="margin-top: 5px;">${edicion.textoOriginal || '<sin texto>'}</div>
       </div>
     `;
-    
-    // Posicionar tooltip cerca del cursor
     const rect = e.target.getBoundingClientRect();
     tooltip.style.position = 'fixed';
     tooltip.style.left = `${rect.left}px`;
     tooltip.style.top = `${rect.bottom + 5}px`;
-    
-    // Eliminar tooltip anterior si existe
     if (tooltipRef.current) {
       document.body.removeChild(tooltipRef.current);
     }
-    
-    // Añadir nuevo tooltip al DOM
     document.body.appendChild(tooltip);
     tooltipRef.current = tooltip;
   };
   
-  // Ocultar tooltip
   const ocultarTooltip = () => {
     if (tooltipRef.current) {
       document.body.removeChild(tooltipRef.current);
@@ -461,32 +317,23 @@ function Chat({ token, user }) {
     }
   };
 
-  // Forzar reconexión del socket
   const forzarReconexion = async () => {
     try {
-      // Desconectar socket actual
       const socket = getSocket();
       if (socket) socket.disconnect();
-      
-      // Crear nuevo socket
       const nuevoSocket = initSocket(token);
       if (nuevoSocket) {
         setConectado(nuevoSocket.connected);
-        
-        // Configurar eventos básicos
         nuevoSocket.on('connect', () => setConectado(true));
         nuevoSocket.on('disconnect', () => setConectado(false));
         nuevoSocket.on('nuevo-mensaje', () => cargarMensajes(true));
       }
-      
-      // Recargar mensajes
       await cargarMensajes();
     } catch (err) {
       setError(`Error al reconectar: ${err.message}`);
     }
   };
 
-  // Manejar selección de archivos
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       setArchivos(Array.from(e.target.files));
@@ -495,14 +342,12 @@ function Chat({ token, user }) {
     }
   };
 
-  // Eliminar archivo de la selección
   const eliminarArchivoSeleccionado = (index) => {
     const nuevoArchivos = [...archivos];
     nuevoArchivos.splice(index, 1);
     setArchivos(nuevoArchivos);
   };
   
-  // Toggle para expandir/contraer archivos
   const toggleArchivosExpandidos = (id) => {
     setArchivosExpandidos(prev => ({
       ...prev,
@@ -510,12 +355,10 @@ function Chat({ token, user }) {
     }));
   };
 
-  // Alternar modo diagnóstico
   const toggleModoDiagnostico = () => {
     setModoDiagnostico(!modoDiagnostico);
   };
 
-  // Forzar scroll hacia abajo
   const forzarScrollAbajo = () => {
     if (scrollRef.current) {
       setScrollAutomatico(true);
@@ -523,20 +366,12 @@ function Chat({ token, user }) {
     }
   };
 
-  // Verificar permisos
   const puedeBorrar = (msg) => user && (user.id === msg.de_usuario || user.rol === 'supervisor' || user.rol === 'admin' || user.rol === 'administrador');
   const puedeEditar = (msg) => user && user.id === msg.de_usuario;
-  
-  // Verificar si un mensaje ha sido editado
-  const fueEditado = (mensajeId) => {
-    return historialEdiciones[mensajeId] !== undefined;
-  };
-  
-  // Obtener hora de edición formateada
+  const fueEditado = (mensajeId) => historialEdiciones[mensajeId] !== undefined;
   const obtenerHoraEdicion = (mensajeId) => {
     const edicion = historialEdiciones[mensajeId];
     if (!edicion) return '';
-    
     try {
       const fecha = new Date(edicion.fechaEdicion);
       return fecha.toLocaleTimeString();
@@ -544,84 +379,64 @@ function Chat({ token, user }) {
       return '';
     }
   };
-  
-  // Determinar tipo de archivo
   const esImagen = (nombre) => {
     if (!nombre) return false;
     const ext = nombre.split('.').pop().toLowerCase();
     return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
   };
-  
   const esPDF = (nombre) => {
     if (!nombre) return false;
     return nombre.split('.').pop().toLowerCase() === 'pdf';
   };
 
-  // Renderizar mensaje individual para el modo diagnóstico
-  const renderizarMensajeIndividual = (msg) => {
-    return (
-      <div 
-        key={msg.id}
-        style={{
-          padding: '10px',
-          margin: '8px 0',
-          borderRadius: '5px',
-          border: '1px solid #ddd',
-          backgroundColor: '#fff8e6', // Color especial para modo diagnóstico
-        }}
-      >
-        <div style={{fontWeight: 'bold'}}>
-          ID: {msg.id} | {msg.autor}:
-        </div>
-        
-        <div style={{marginTop: '5px'}}>
-          Mensaje: {msg.mensaje || '<sin texto>'}
-        </div>
-        
-        {msg.archivo_nombre && (
-          <div style={{marginTop: '5px'}}>
-            Archivo: {msg.archivo_nombre}
-          </div>
-        )}
-        
-        <div style={{
-          marginTop: '5px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: '0.8em',
-          color: '#666'
-        }}>
-          <div>Fecha: {new Date(msg.fecha).toLocaleString()}</div>
-          <div>Usuario ID: {msg.de_usuario}</div>
-        </div>
+  const renderizarMensajeIndividual = (msg) => (
+    <div 
+      key={msg.id}
+      style={{
+        padding: '10px',
+        margin: '8px 0',
+        borderRadius: '5px',
+        border: '1px solid #ddd',
+        backgroundColor: '#fff8e6',
+      }}
+    >
+      <div style={{fontWeight: 'bold'}}>
+        ID: {msg.id} | {msg.autor}:
       </div>
-    );
-  };
+      <div style={{marginTop: '5px'}}>
+        Mensaje: {msg.mensaje || '<sin texto>'}
+      </div>
+      {msg.archivo_nombre && (
+        <div style={{marginTop: '5px'}}>
+          Archivo: {msg.archivo_nombre}
+        </div>
+      )}
+      <div style={{
+        marginTop: '5px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: '0.8em',
+        color: '#666'
+      }}>
+        <div>Fecha: {new Date(msg.fecha).toLocaleString()}</div>
+        <div>Usuario ID: {msg.de_usuario}</div>
+      </div>
+    </div>
+  );
 
-  // Renderizar un grupo de mensajes
   const renderizarGrupo = (grupo) => {
     if (!grupo || grupo.length === 0) return null;
-    
-    // En modo diagnóstico, renderizar cada mensaje por separado
     if (modoDiagnostico) {
       return renderizarMensajeIndividual(grupo[0]);
     }
-    
-    // Encontrar el mensaje principal (con texto)
     const mensajePrincipal = grupo.find(m => m.mensaje && m.mensaje.trim() !== '') || grupo[0];
-    
-    // Recopilar todos los archivos del grupo
     const archivosGrupo = grupo.filter(m => m.archivo_nombre).map(m => ({
       id: m.id,
       nombre: m.archivo_nombre,
       de_usuario: m.de_usuario,
       mensaje_id: m.id
     }));
-    
-    // Determinar si mostrar archivos expandidos
     const mostrarExpandidos = archivosExpandidos[mensajePrincipal.id] || false;
-    
-    // Verificar si este mensaje ha sido editado
     const mensajeEditado = fueEditado(mensajePrincipal.id);
     const horaEdicion = obtenerHoraEdicion(mensajePrincipal.id);
 
@@ -636,12 +451,9 @@ function Chat({ token, user }) {
           backgroundColor: mensajePrincipal.de_usuario === user?.id ? '#e6f7ff' : '#fff',
         }}
       >
-        {/* Autor */}
         <div style={{fontWeight: 'bold'}}>
           {mensajePrincipal.autor}:
         </div>
-        
-        {/* Contenido */}
         {editando === mensajePrincipal.id ? (
           <div style={{marginTop: '8px'}}>
             <textarea
@@ -689,7 +501,6 @@ function Chat({ token, user }) {
         ) : (
           mensajePrincipal.mensaje && (
             <div style={{marginTop: '8px', position: 'relative'}}>
-              {/* Mensaje con tooltip para ver contenido original si fue editado */}
               <span 
                 className="mensaje-texto"
                 onMouseEnter={mensajeEditado ? (e) => mostrarTooltip(e, mensajePrincipal.id) : null}
@@ -702,8 +513,6 @@ function Chat({ token, user }) {
               >
                 {mensajePrincipal.mensaje}
               </span>
-              
-              {/* Indicador de edición con hora */}
               {mensajeEditado && (
                 <span style={{
                   marginLeft: '6px',
@@ -717,8 +526,6 @@ function Chat({ token, user }) {
             </div>
           )
         )}
-        
-        {/* Archivos adjuntos */}
         {archivosGrupo.length > 0 && (
           <div style={{marginTop: '10px'}}>
             {!mostrarExpandidos ? (
@@ -759,7 +566,6 @@ function Chat({ token, user }) {
                       : `Archivos adjuntos (${archivosGrupo.length})`}
                   </h4>
                   <div style={{display: 'flex', gap: '8px'}}>
-                    {/* Botón para eliminar todos los archivos */}
                     {archivosGrupo.length > 1 && puedeBorrar({de_usuario: mensajePrincipal.de_usuario}) && (
                       <button
                         onClick={() => eliminarTodosArchivos(archivosGrupo)}
@@ -792,7 +598,6 @@ function Chat({ token, user }) {
                     </button>
                   </div>
                 </div>
-                
                 <div style={{
                   display: 'flex',
                   flexWrap: 'wrap',
@@ -824,7 +629,6 @@ function Chat({ token, user }) {
                           ✕
                         </button>
                       )}
-                      
                       {esImagen(archivo.nombre) ? (
                         <a 
                           href={getFileUrl(archivo.nombre)} 
@@ -894,8 +698,6 @@ function Chat({ token, user }) {
             )}
           </div>
         )}
-        
-        {/* Fecha y acciones */}
         <div style={{
           marginTop: '8px',
           display: 'flex',
@@ -907,9 +709,7 @@ function Chat({ token, user }) {
           <div style={{color: '#777', fontSize: '0.9em'}}>
             {new Date(mensajePrincipal.fecha).toLocaleString()}
           </div>
-          
           <div>
-            {/* Botones de acción */}
             {puedeEditar(mensajePrincipal) && editando !== mensajePrincipal.id && (
               <button
                 onClick={() => iniciarEdicion(mensajePrincipal)}
@@ -927,7 +727,6 @@ function Chat({ token, user }) {
                 ✏️ Editar
               </button>
             )}
-            
             {puedeBorrar(mensajePrincipal) && (
               <button
                 onClick={() => eliminarMensaje(mensajePrincipal.id)}
@@ -950,7 +749,6 @@ function Chat({ token, user }) {
     );
   };
 
-  // Generar grupos de mensajes para mostrar
   const mensajesAgrupados = agruparMensajes();
 
   return (
@@ -994,8 +792,6 @@ function Chat({ token, user }) {
           )}
         </div>
       </h2>
-      
-      {/* Panel de información mejorado - SOLO PARA ADMINISTRADORES */}
       {esAdministrador() && (
         <div style={{
           padding: '10px',
@@ -1034,8 +830,6 @@ function Chat({ token, user }) {
               </button>
             </div>
           </div>
-          
-          {/* Estadísticas detalladas */}
           <div style={{marginTop: '8px', fontSize: '13px'}}>
             <span>
               {mensajesRaw.filter(m => m.mensaje && m.mensaje.trim() !== '').length} con texto |
@@ -1045,8 +839,6 @@ function Chat({ token, user }) {
           </div>
         </div>
       )}
-      
-      {/* Área de mensajes con indicador de scroll */}
       <div style={{position: 'relative'}}>
         <div 
           ref={scrollRef} 
@@ -1070,7 +862,6 @@ function Chat({ token, user }) {
               Actualizando mensajes...
             </div>
           )}
-          
           <div>
             {mensajesAgrupados.length > 0 ? (
               mensajesAgrupados.map((grupo, index) => (
@@ -1087,8 +878,6 @@ function Chat({ token, user }) {
             )}
           </div>
         </div>
-        
-        {/* Botón para ir al final (visible solo cuando scroll automático está desactivado) */}
         {!scrollAutomatico && mensajesAgrupados.length > 10 && (
           <button
             onClick={forzarScrollAbajo}
@@ -1116,10 +905,7 @@ function Chat({ token, user }) {
           </button>
         )}
       </div>
-      
-      {/* Formulario de envío */}
       <form onSubmit={enviarMensaje} style={{marginTop: '20px'}}>
-        {/* Input de mensaje */}
         <div style={{marginBottom: '10px'}}>
           <input
             type="text"
@@ -1150,8 +936,6 @@ function Chat({ token, user }) {
             {enviando ? 'Enviando...' : 'Enviar'}
           </button>
         </div>
-        
-        {/* Selector de archivos */}
         <div>
           <input
             id="fileInput"
@@ -1161,8 +945,6 @@ function Chat({ token, user }) {
             style={{marginBottom: '10px'}}
             disabled={enviando}
           />
-          
-          {/* Lista de archivos seleccionados */}
           {archivos.length > 0 && (
             <div style={{
               marginTop: '10px',
@@ -1195,8 +977,6 @@ function Chat({ token, user }) {
           )}
         </div>
       </form>
-      
-      {/* Mensaje de error */}
       {error && (
         <div style={{
           marginTop: '15px',
@@ -1222,8 +1002,6 @@ function Chat({ token, user }) {
           </button>
         </div>
       )}
-      
-      {/* Botones de acción - SOLO PARA ADMINISTRADORES */}
       {esAdministrador() && (
         <div style={{
           display: 'flex',
@@ -1245,7 +1023,6 @@ function Chat({ token, user }) {
           >
             {cargando ? 'Actualizando...' : 'Recargar mensajes'}
           </button>
-          
           <button
             onClick={forzarReconexion}
             style={{
@@ -1261,8 +1038,6 @@ function Chat({ token, user }) {
           </button>
         </div>
       )}
-      
-      {/* Panel de diagnóstico detallado (visible solo en modo diagnóstico y para admins) */}
       {modoDiagnostico && esAdministrador() && (
         <div style={{
           marginTop: '20px',

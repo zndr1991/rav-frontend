@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { fetchFiles, uploadFile } from "../api";
 
 export default function Files({ token }) {
@@ -6,14 +6,15 @@ export default function Files({ token }) {
   const [file, setFile] = useState(null);
   const [msg, setMsg] = useState("");
 
-  const cargarArchivos = async () => {
+  // Usa useCallback para que cargarArchivos pueda ir en dependencias de useEffect
+  const cargarArchivos = useCallback(async () => {
     const data = await fetchFiles(token);
     setArchivos(data);
-  };
+  }, [token]);
 
   useEffect(() => {
     cargarArchivos();
-  }, []);
+  }, [cargarArchivos]);
 
   const handleUpload = async (e) => {
     e.preventDefault();
