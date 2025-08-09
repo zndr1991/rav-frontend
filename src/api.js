@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
-const API_URL = "http://localhost:3001/api";
-const BASE_URL = "http://localhost:3001";
+const API_URL = "https://rav-backend.onrender.com/api";
+const BASE_URL = "https://rav-backend.onrender.com";
 
 // Variable global para mantener la instancia del socket
 let socketInstance = null;
