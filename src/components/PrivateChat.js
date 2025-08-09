@@ -12,7 +12,6 @@ import {
 } from '../api';
 
 function PrivateChat({ token, user, recipient, onBack }) {
-  // Estados básicos
   const [mensajes, setMensajes] = useState([]);
   const [mensajeTexto, setMensajeTexto] = useState('');
   const [archivos, setArchivos] = useState([]);
@@ -26,6 +25,7 @@ function PrivateChat({ token, user, recipient, onBack }) {
   const [historialEdiciones, setHistorialEdiciones] = useState({});
   const [scrollAutomatico, setScrollAutomatico] = useState(true);
   const [gruposArchivos, setGruposArchivos] = useState({});
+  
   const scrollRef = useRef(null);
   const cargandoRef = useRef(false);
   const socketRef = useRef(null);
@@ -34,7 +34,6 @@ function PrivateChat({ token, user, recipient, onBack }) {
   const ultimaAlturaScroll = useRef(0);
   const tooltipRef = useRef(null);
 
-  // Agrupador de archivos
   useEffect(() => {
     if (!mensajes.length) return;
     const grupos = {};
@@ -56,7 +55,6 @@ function PrivateChat({ token, user, recipient, onBack }) {
     setGruposArchivos(grupos);
   }, [mensajes]);
 
-  // Memoized cargarMensajes para dependencias correctas en useEffect
   const cargarMensajes = useCallback(async (silencioso = false) => {
     if (!recipient) return;
     if (cargandoRef.current) return;
@@ -136,8 +134,9 @@ function PrivateChat({ token, user, recipient, onBack }) {
     }
     return () => {
       clearInterval(intervalId);
-      if (actualizacionProgramadaRef.current) {
-        clearTimeout(actualizacionProgramadaRef.current);
+      const timeout = actualizacionProgramadaRef.current;
+      if (timeout) {
+        clearTimeout(timeout);
       }
     };
   }, [token, recipient, cargarMensajes]);
@@ -248,7 +247,6 @@ function PrivateChat({ token, user, recipient, onBack }) {
         body: JSON.stringify(requestBody)
       });
       if (!response.ok) {
-        const errorText = await response.text();
         throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
       }
       try {
@@ -471,7 +469,6 @@ function PrivateChat({ token, user, recipient, onBack }) {
         </div>
       </div>
 
-      {/* Área de mensajes con indicador de scroll */}
       <div style={{position: 'relative'}}>
         <div 
           ref={scrollRef} 
