@@ -168,6 +168,7 @@ export async function sendMessage(mensaje, token, archivos = []) {
     if (archivos.length <= 1) {
       const formData = new FormData();
       formData.append("mensaje", mensaje || "");
+      formData.append("de_usuario", "1");
       
       if (archivos.length === 1) {
         formData.append("archivos", archivos[0]);
@@ -190,6 +191,7 @@ export async function sendMessage(mensaje, token, archivos = []) {
     // Primer archivo con el mensaje
     const primerFormData = new FormData();
     primerFormData.append("mensaje", mensaje);
+    primerFormData.append("de_usuario", "1");
     primerFormData.append("archivos", archivos[0]);
     
     const respuestaPrimero = await fetch(`${API_URL}/chat/general`, {
@@ -203,6 +205,7 @@ export async function sendMessage(mensaje, token, archivos = []) {
     for(let i = 1; i < archivos.length; i++) {
       const otroFormData = new FormData();
       otroFormData.append("mensaje", ""); // Mensaje vacío
+      otroFormData.append("de_usuario", "1");
       otroFormData.append("archivos", archivos[i]);
       
       const respuesta = await fetch(`${API_URL}/chat/general`, {

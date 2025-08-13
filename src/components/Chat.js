@@ -17,6 +17,7 @@ function Chat({ token, user }) {
   const [mensajesRaw, setMensajesRaw] = useState([]);
   const [scrollAutomatico, setScrollAutomatico] = useState(true);
   const [historialEdiciones, setHistorialEdiciones] = useState({});
+  const [ultimoMensajeId, setUltimoMensajeId] = useState(null);
   
   const scrollRef = useRef(null);
   const cargandoRef = useRef(false);
@@ -25,16 +26,76 @@ function Chat({ token, user }) {
   const usuarioScrolleando = useRef(false);
   const ultimaAlturaScroll = useRef(0);
   const tooltipRef = useRef(null);
+  const mensajesRef = useRef(mensajes);
+
+  // Actualizar ref cuando cambian los mensajes
+  useEffect(() => {
+    mensajesRef.current = mensajes;
+  }, [mensajes]);
+
+  // ========== SISTEMA DE NOTIFICACIONES ==========
+  // Solicitar permisos de notificación al cargar
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          console.log("✅ Permisos de notificación concedidos");
+        }
+      });
+    }
+  }, []);
+
+  // Función para mostrar notificación
+  const mostrarNotificacion = (mensaje) => {
+    console.log("🔔 INTENTO DE NOTIFICACIÓN:");
+    console.log("- Mensaje:", mensaje);
+    console.log("- Mi ID:", user?.id);
+    console.log("- ID emisor:", mensaje.de_usuario);
+    
+    // IMPORTANTE: Convertir a número para comparar
+    if (Number(mensaje.de_usuario) === Number(user?.id)) {
+      console.log("❌ Es mi propio mensaje");
+      return;
+    }
+    
+    // Crear notificación
+    if ("Notification" in window && Notification.permission === "granted") {
+      try {
+        const notificacion = new Notification(`💬 ${mensaje.autor || 'Nuevo mensaje'}`, {
+          body: mensaje.mensaje || "📎 Archivo adjunto",
+          icon: "/favicon.ico",
+          tag: `mensaje-${mensaje.id}`,
+          requireInteraction: false
+        });
+        
+        console.log("✅ Notificación creada");
+        
+        notificacion.onclick = () => {
+          window.focus();
+          notificacion.close();
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        };
+        
+        setTimeout(() => notificacion.close(), 5000);
+      } catch (error) {
+        console.error("❌ Error creando notificación:", error);
+      }
+    }
+  };
+  // ========== FIN SISTEMA DE NOTIFICACIONES ==========
 
   const esAdministrador = () => {
     return user && (user.rol === 'admin' || user.rol === 'supervisor' || user.rol === 'administrador');
   };
 
-  // Memoized cargarMensajes para ser dependencia de useEffect
+  // Memoized cargarMensajes simplificado
   const cargarMensajes = useCallback(async (silencioso = false) => {
     if (cargandoRef.current) return;
     cargandoRef.current = true;
     if (!silencioso) setCargando(true);
+    
     try {
       const data = await fetchChat(token);
       if (Array.isArray(data)) {
@@ -42,10 +103,56 @@ function Chat({ token, user }) {
         const mensajesOrdenados = [...data].sort((a, b) => 
           new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
         );
+        
+        // Obtener el último mensaje actual ANTES de actualizar
+        const mensajesActuales = mensajesRef.current;
+        const ultimoIdActual = mensajesActuales.length > 0 
+          ? mensajesActuales[mensajesActuales.length - 1].id 
+          : null;
+        
+        console.log("📊 Comparando mensajes:", {
+          ultimoIdActual,
+          totalNuevos: mensajesOrdenados.length,
+          miUsuarioId: user?.id
+        });
+        
+        if (mensajesOrdenados.length > 0) {
+          const ultimoMensajeNuevo = mensajesOrdenados[mensajesOrdenados.length - 1];
+          
+          // Detectar si hay un mensaje nuevo
+          if (ultimoIdActual && ultimoMensajeNuevo.id !== ultimoIdActual) {
+            console.log("🆕 NUEVO MENSAJE DETECTADO!");
+            console.log("- ID anterior:", ultimoIdActual);
+            console.log("- ID nuevo:", ultimoMensajeNuevo.id);
+            console.log("- Autor:", ultimoMensajeNuevo.autor);
+            console.log("- De usuario:", ultimoMensajeNuevo.de_usuario);
+            
+            // Verificar si NO es mío
+            const noEsMio = Number(ultimoMensajeNuevo.de_usuario) !== Number(user?.id);
+            console.log("- ¿Es de otro usuario?", noEsMio);
+            
+            if (noEsMio) {
+              const ahora = new Date();
+              const fechaMensaje = new Date(ultimoMensajeNuevo.fecha);
+              const diferencia = (ahora - fechaMensaje) / 1000;
+              
+              console.log("⏰ Antigüedad del mensaje:", diferencia, "segundos");
+              
+              // Notificar si es reciente (menos de 60 segundos)
+              if (diferencia < 60) {
+                console.log("🔔🔔🔔 ENVIANDO NOTIFICACIÓN!");
+                mostrarNotificacion(ultimoMensajeNuevo);
+              } else {
+                console.log("❌ Mensaje muy antiguo, no notifico");
+              }
+            } else {
+              console.log("👤 Es mi propio mensaje, no notifico");
+            }
+          }
+        }
+        
         setMensajes(mensajesOrdenados);
         setUltimaActualizacion(new Date().toLocaleTimeString());
-      } else if (data.error && !silencioso) {
-        setError(`Error: ${data.error}`);
       }
     } catch (err) {
       if (!silencioso) {
@@ -55,40 +162,100 @@ function Chat({ token, user }) {
       if (!silencioso) setCargando(false);
       cargandoRef.current = false;
     }
-  }, [token]);
+  }, [token, user?.id]);
 
+  // ========== CONFIGURACIÓN DEL SOCKET Y CONEXIÓN INICIAL ==========
   useEffect(() => {
+    // Cargar mensajes inicialmente
     cargarMensajes();
+    
+    // Configurar intervalo de actualización
     const intervalId = setInterval(() => {
       if (!cargandoRef.current) {
         cargarMensajes(true);
       }
     }, 2500);
 
-    const socket = getSocket() || initSocket(token);
+    // INICIALIZAR SOCKET CORRECTAMENTE
+    console.log("🔌 Inicializando conexión Socket.IO...");
+    let socket = getSocket();
+    
+    if (!socket) {
+      console.log("📡 Creando nueva conexión Socket.IO...");
+      socket = initSocket(token);
+    }
+    
     if (socket) {
       socketRef.current = socket;
+      
+      // Verificar estado inicial
+      console.log("🔍 Estado inicial del socket:", socket.connected);
       setConectado(socket.connected);
+      
+      // Si no está conectado, intentar conectar
+      if (!socket.connected) {
+        console.log("🔄 Intentando conectar socket...");
+        socket.connect();
+      }
 
-      socket.on('connect', () => setConectado(true));
-      socket.on('disconnect', () => setConectado(false));
-      socket.on('nuevo-mensaje', () => {
+      // Event listeners
+      socket.on('connect', () => {
+        console.log("✅ Socket conectado a Render");
+        setConectado(true);
+      });
+      
+      socket.on('disconnect', () => {
+        console.log("❌ Socket desconectado de Render");
+        setConectado(false);
+      });
+      
+      socket.on('nuevo-mensaje', (datosNuevoMensaje) => {
+        console.log("📨 Socket: nuevo-mensaje recibido");
+        
         if (actualizacionProgramadaRef.current) {
           clearTimeout(actualizacionProgramadaRef.current);
         }
-        actualizacionProgramadaRef.current = setTimeout(() => {
-          cargarMensajes(true);
+        
+        actualizacionProgramadaRef.current = setTimeout(async () => {
+          await cargarMensajes(true);
         }, 300);
       });
-      socket.on('mensaje-eliminado', () => cargarMensajes(true));
-      socket.on('mensaje-editado', () => cargarMensajes(true));
+      
+      socket.on('mensaje-eliminado', () => {
+        console.log("🗑️ Mensaje eliminado");
+        cargarMensajes(true);
+      });
+      
+      socket.on('mensaje-editado', () => {
+        console.log("✏️ Mensaje editado");
+        cargarMensajes(true);
+      });
+      
+      // Listener de errores
+      socket.on('connect_error', (error) => {
+        console.error("❌ Error de conexión:", error.message);
+      });
+    } else {
+      console.error("❌ No se pudo crear el socket");
+      setConectado(false);
     }
 
+    // Verificar conexión periódicamente
     const checkConnectionId = setInterval(() => {
-      const socket = getSocket();
-      if (socket) setConectado(socket.connected);
+      const currentSocket = getSocket();
+      if (currentSocket) {
+        const isConnected = currentSocket.connected;
+        setConectado(isConnected);
+        
+        // Si se desconectó, intentar reconectar
+        if (!isConnected && !currentSocket.connecting) {
+          console.log("🔄 Reconectando socket...");
+          currentSocket.connect();
+        }
+      }
     }, 3000);
 
+    // Cargar historial de ediciones
     const historialGuardado = localStorage.getItem('historial_ediciones');
     if (historialGuardado) {
       try {
@@ -98,6 +265,7 @@ function Chat({ token, user }) {
       }
     }
 
+    // Cleanup
     return () => {
       clearInterval(intervalId);
       clearInterval(checkConnectionId);
@@ -105,7 +273,7 @@ function Chat({ token, user }) {
         clearTimeout(actualizacionProgramadaRef.current);
       }
     };
-  }, [token, cargarMensajes]);
+  }, [token, user?.id]); // Sin cargarMensajes en las dependencias
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -326,7 +494,9 @@ function Chat({ token, user }) {
         setConectado(nuevoSocket.connected);
         nuevoSocket.on('connect', () => setConectado(true));
         nuevoSocket.on('disconnect', () => setConectado(false));
-        nuevoSocket.on('nuevo-mensaje', () => cargarMensajes(true));
+        nuevoSocket.on('nuevo-mensaje', () => {
+          cargarMensajes(true);
+        });
       }
       await cargarMensajes();
     } catch (err) {
@@ -792,6 +962,31 @@ function Chat({ token, user }) {
           )}
         </div>
       </h2>
+      
+      {/* Indicador de notificaciones */}
+      {"Notification" in window && (
+        <div style={{
+          padding: '5px 10px',
+          backgroundColor: Notification.permission === "granted" ? '#d4edda' : 
+                         Notification.permission === "denied" ? '#f8d7da' : '#fff3cd',
+          color: Notification.permission === "granted" ? '#155724' : 
+                Notification.permission === "denied" ? '#721c24' : '#856404',
+          borderRadius: '4px',
+          marginBottom: '10px',
+          fontSize: '12px',
+          border: `1px solid ${
+            Notification.permission === "granted" ? '#c3e6cb' : 
+            Notification.permission === "denied" ? '#f5c6cb' : '#ffeeba'
+          }`
+        }}>
+          🔔 Notificaciones: {
+            Notification.permission === "granted" ? "Activadas ✓" :
+            Notification.permission === "denied" ? "Bloqueadas ✗ (Actívalas en configuración del navegador)" :
+            "No configuradas (Se solicitará permiso)"
+          }
+        </div>
+      )}
+
       {esAdministrador() && (
         <div style={{
           padding: '10px',
