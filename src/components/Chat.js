@@ -18,7 +18,7 @@ function Chat({ token, user }) {
   const [scrollAutomatico, setScrollAutomatico] = useState(true);
   const [historialEdiciones, setHistorialEdiciones] = useState({});
   const [ultimoMensajeId, setUltimoMensajeId] = useState(null);
-  
+
   const scrollRef = useRef(null);
   const cargandoRef = useRef(false);
   const socketRef = useRef(null);
@@ -27,14 +27,13 @@ function Chat({ token, user }) {
   const ultimaAlturaScroll = useRef(0);
   const tooltipRef = useRef(null);
   const mensajesRef = useRef(mensajes);
+  const ultimoNotificadoRef = useRef(null); // NUEVO: evita notificaciones duplicadas
 
-  // Actualizar ref cuando cambian los mensajes
   useEffect(() => {
     mensajesRef.current = mensajes;
   }, [mensajes]);
 
   // ========== SISTEMA DE NOTIFICACIONES ==========
-  // Solicitar permisos de notificación al cargar
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().then(permission => {
@@ -45,31 +44,21 @@ function Chat({ token, user }) {
     }
   }, []);
 
-  // Función para mostrar notificación
   const mostrarNotificacion = (mensaje) => {
-    console.log("🔔 INTENTO DE NOTIFICACIÓN:");
-    console.log("- Mensaje:", mensaje);
-    console.log("- Mi ID:", user?.id);
-    console.log("- ID emisor:", mensaje.de_usuario);
-    
-    // IMPORTANTE: Convertir a número para comparar
-    if (Number(mensaje.de_usuario) === Number(user?.id)) {
-      console.log("❌ Es mi propio mensaje");
-      return;
-    }
-    
-    // Crear notificación
+    // Evita notificar si el mensaje es tuyo
+    if (Number(mensaje.de_usuario) === Number(user?.id)) return;
+    // Evita notificar dos veces el mismo mensaje
+    if (ultimoNotificadoRef.current === mensaje.id) return;
+    ultimoNotificadoRef.current = mensaje.id;
+
     if ("Notification" in window && Notification.permission === "granted") {
       try {
-        const notificacion = new Notification(`💬 ${mensaje.autor || 'Nuevo mensaje'}`, {
+        const titulo = `💬 ${mensaje.autor || 'Nuevo mensaje'}`;
+        const notificacion = new Notification(titulo, {
           body: mensaje.mensaje || "📎 Archivo adjunto",
           icon: "/favicon.ico",
-          tag: `mensaje-${mensaje.id}`,
-          requireInteraction: false
+          requireInteraction: true
         });
-        
-        console.log("✅ Notificación creada");
-        
         notificacion.onclick = () => {
           window.focus();
           notificacion.close();
@@ -77,8 +66,6 @@ function Chat({ token, user }) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
           }
         };
-        
-        setTimeout(() => notificacion.close(), 5000);
       } catch (error) {
         console.error("❌ Error creando notificación:", error);
       }
@@ -90,67 +77,18 @@ function Chat({ token, user }) {
     return user && (user.rol === 'admin' || user.rol === 'supervisor' || user.rol === 'administrador');
   };
 
-  // Memoized cargarMensajes simplificado
   const cargarMensajes = useCallback(async (silencioso = false) => {
     if (cargandoRef.current) return;
     cargandoRef.current = true;
     if (!silencioso) setCargando(true);
-    
+
     try {
       const data = await fetchChat(token);
       if (Array.isArray(data)) {
         setMensajesRaw(data);
-        const mensajesOrdenados = [...data].sort((a, b) => 
+        const mensajesOrdenados = [...data].sort((a, b) =>
           new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
         );
-        
-        // Obtener el último mensaje actual ANTES de actualizar
-        const mensajesActuales = mensajesRef.current;
-        const ultimoIdActual = mensajesActuales.length > 0 
-          ? mensajesActuales[mensajesActuales.length - 1].id 
-          : null;
-        
-        console.log("📊 Comparando mensajes:", {
-          ultimoIdActual,
-          totalNuevos: mensajesOrdenados.length,
-          miUsuarioId: user?.id
-        });
-        
-        if (mensajesOrdenados.length > 0) {
-          const ultimoMensajeNuevo = mensajesOrdenados[mensajesOrdenados.length - 1];
-          
-          // Detectar si hay un mensaje nuevo
-          if (ultimoIdActual && ultimoMensajeNuevo.id !== ultimoIdActual) {
-            console.log("🆕 NUEVO MENSAJE DETECTADO!");
-            console.log("- ID anterior:", ultimoIdActual);
-            console.log("- ID nuevo:", ultimoMensajeNuevo.id);
-            console.log("- Autor:", ultimoMensajeNuevo.autor);
-            console.log("- De usuario:", ultimoMensajeNuevo.de_usuario);
-            
-            // Verificar si NO es mío
-            const noEsMio = Number(ultimoMensajeNuevo.de_usuario) !== Number(user?.id);
-            console.log("- ¿Es de otro usuario?", noEsMio);
-            
-            if (noEsMio) {
-              const ahora = new Date();
-              const fechaMensaje = new Date(ultimoMensajeNuevo.fecha);
-              const diferencia = (ahora - fechaMensaje) / 1000;
-              
-              console.log("⏰ Antigüedad del mensaje:", diferencia, "segundos");
-              
-              // Notificar si es reciente (menos de 60 segundos)
-              if (diferencia < 60) {
-                console.log("🔔🔔🔔 ENVIANDO NOTIFICACIÓN!");
-                mostrarNotificacion(ultimoMensajeNuevo);
-              } else {
-                console.log("❌ Mensaje muy antiguo, no notifico");
-              }
-            } else {
-              console.log("👤 Es mi propio mensaje, no notifico");
-            }
-          }
-        }
-        
         setMensajes(mensajesOrdenados);
         setUltimaActualizacion(new Date().toLocaleTimeString());
       }
@@ -162,100 +100,74 @@ function Chat({ token, user }) {
       if (!silencioso) setCargando(false);
       cargandoRef.current = false;
     }
-  }, [token, user?.id]);
+  }, [token]);
 
   // ========== CONFIGURACIÓN DEL SOCKET Y CONEXIÓN INICIAL ==========
   useEffect(() => {
-    // Cargar mensajes inicialmente
     cargarMensajes();
-    
-    // Configurar intervalo de actualización
     const intervalId = setInterval(() => {
       if (!cargandoRef.current) {
         cargarMensajes(true);
       }
     }, 2500);
 
-    // INICIALIZAR SOCKET CORRECTAMENTE
-    console.log("🔌 Inicializando conexión Socket.IO...");
     let socket = getSocket();
-    
     if (!socket) {
-      console.log("📡 Creando nueva conexión Socket.IO...");
       socket = initSocket(token);
+      console.log("📡 Creando nueva conexión Socket.IO...");
     }
-    
-    if (socket) {
-      socketRef.current = socket;
-      
-      // Verificar estado inicial
-      console.log("🔍 Estado inicial del socket:", socket.connected);
-      setConectado(socket.connected);
-      
-      // Si no está conectado, intentar conectar
-      if (!socket.connected) {
-        console.log("🔄 Intentando conectar socket...");
-        socket.connect();
-      }
+if (socket) {
+  socketRef.current = socket;
+  setConectado(socket.connected);
+  if (!socket.connected) {
+    socket.connect();
+    console.log("🔄 Intentando conectar socket...");
+  }
 
-      // Event listeners
-      socket.on('connect', () => {
-        console.log("✅ Socket conectado a Render");
-        setConectado(true);
-      });
-      
-      socket.on('disconnect', () => {
-        console.log("❌ Socket desconectado de Render");
-        setConectado(false);
-      });
-      
-      socket.on('nuevo-mensaje', (datosNuevoMensaje) => {
-        console.log("📨 Socket: nuevo-mensaje recibido");
-        
-        if (actualizacionProgramadaRef.current) {
-          clearTimeout(actualizacionProgramadaRef.current);
-        }
-        
-        actualizacionProgramadaRef.current = setTimeout(async () => {
-          await cargarMensajes(true);
-        }, 300);
-      });
-      
-      socket.on('mensaje-eliminado', () => {
-        console.log("🗑️ Mensaje eliminado");
-        cargarMensajes(true);
-      });
-      
-      socket.on('mensaje-editado', () => {
-        console.log("✏️ Mensaje editado");
-        cargarMensajes(true);
-      });
-      
-      // Listener de errores
-      socket.on('connect_error', (error) => {
-        console.error("❌ Error de conexión:", error.message);
-      });
-    } else {
-      console.error("❌ No se pudo crear el socket");
-      setConectado(false);
-    }
+  // ⚡️ Siempre limpia antes de agregar
+  socket.off('connect');
+  socket.off('disconnect');
+  socket.off('nuevo-mensaje');
+  socket.off('mensaje-eliminado');
+  socket.off('mensaje-editado');
+  socket.off('connect_error');
 
-    // Verificar conexión periódicamente
+  socket.on('connect', () => {
+    setConectado(true);
+  });
+  socket.on('disconnect', () => {
+    setConectado(false);
+  });
+  socket.on('nuevo-mensaje', (datosNuevoMensaje) => {
+    mostrarNotificacion(datosNuevoMensaje);
+    cargarMensajes(true);
+  });
+  socket.on('mensaje-eliminado', () => {
+    cargarMensajes(true);
+  });
+  socket.on('mensaje-editado', () => {
+    cargarMensajes(true);
+  });
+  socket.on('connect_error', (error) => {
+    console.error("❌ Error de conexión:", error.message);
+  });
+} else {
+  console.error("❌ No se pudo crear el socket");
+  setConectado(false);
+}
+
     const checkConnectionId = setInterval(() => {
       const currentSocket = getSocket();
       if (currentSocket) {
         const isConnected = currentSocket.connected;
         setConectado(isConnected);
-        
-        // Si se desconectó, intentar reconectar
+
         if (!isConnected && !currentSocket.connecting) {
-          console.log("🔄 Reconectando socket...");
           currentSocket.connect();
         }
       }
     }, 3000);
 
-    // Cargar historial de ediciones
     const historialGuardado = localStorage.getItem('historial_ediciones');
     if (historialGuardado) {
       try {
@@ -265,15 +177,22 @@ function Chat({ token, user }) {
       }
     }
 
-    // Cleanup
     return () => {
       clearInterval(intervalId);
       clearInterval(checkConnectionId);
       if (actualizacionProgramadaRef.current) {
         clearTimeout(actualizacionProgramadaRef.current);
       }
+      if (socketRef.current) {
+        socketRef.current.off('nuevo-mensaje');
+        socketRef.current.off('connect');
+        socketRef.current.off('disconnect');
+        socketRef.current.off('mensaje-eliminado');
+        socketRef.current.off('mensaje-editado');
+        socketRef.current.off('connect_error');
+      }
     };
-  }, [token, user?.id]); // Sin cargarMensajes en las dependencias
+  }, [token]);
 
   useEffect(() => {
     if (!scrollRef.current) return;

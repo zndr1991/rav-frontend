@@ -1,18 +1,56 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
 import Register from "./components/Register";
-import ChatSelector from "./components/ChatSelector"; // Cambiar esto - importar ChatSelector en lugar de Chat
+import ChatSelector from "./components/ChatSelector";
 import Files from "./components/Files";
+import { getSocket, initSocket, isSocketConnected } from "./api";
+
+// Notificación solo para mensajes grupales
+function mostrarNotificacion(titulo, mensaje) {
+  if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(titulo, {
+      body: mensaje,
+      icon: "/favicon.ico",
+    });
+  }
+}
 
 function App() {
-  // Estado del token y usuario logueado
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [user, setUser] = useState(
     localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null
   );
   const [view, setView] = useState(token ? "chat" : "login");
 
-  // Cerrar sesión
+  useEffect(() => {
+    if (token && (!isSocketConnected() || !getSocket())) {
+      initSocket(token);
+    }
+  }, [token]);
+
+  // Listener solo para mensajes grupales
+  useEffect(() => {
+    const socket = getSocket();
+    if (!token || !user || !socket) return;
+
+    socket.off("nuevo-mensaje");
+    function handleNuevoMensaje(datosNuevoMensaje) {
+      console.log("SOCKET GRUPAL:", datosNuevoMensaje);
+      mostrarNotificacion(
+        `Mensaje grupal de ${datosNuevoMensaje.autor || "alguien"}`,
+        datosNuevoMensaje.mensaje
+      );
+    }
+    socket.on("nuevo-mensaje", handleNuevoMensaje);
+
+    return () => {
+      socket.off("nuevo-mensaje", handleNuevoMensaje);
+    };
+  }, [token, user]);
+
   const cerrarSesion = () => {
     setToken("");
     setUser(null);
@@ -21,14 +59,9 @@ function App() {
     setView("login");
   };
 
-  // Renderizar login o registro si no hay token
   if (!token) {
     if (view === "register") {
-      return (
-        <Register
-          goToLogin={() => setView("login")}
-        />
-      );
+      return <Register goToLogin={() => setView("login")} />;
     }
     return (
       <Login
@@ -44,13 +77,12 @@ function App() {
     );
   }
 
-  // Renderizar app principal cuando el usuario está autenticado
   return (
-    <div style={{ maxWidth: 800, margin: "30px auto" }}> {/* Amplié un poco el ancho máximo para acomodar el panel lateral */}
+    <div style={{ maxWidth: 800, margin: "30px auto" }}>
       <h1>Sistema de Chat y Archivos</h1>
-      <button 
-        onClick={cerrarSesion} 
-        style={{ 
+      <button
+        onClick={cerrarSesion}
+        style={{
           float: "right",
           padding: "8px 15px",
           backgroundColor: "#f44336",
@@ -65,7 +97,7 @@ function App() {
       <div style={{ display: "flex", gap: 20, margin: "20px 0" }}>
         <button
           onClick={() => setView("chat")}
-          style={{ 
+          style={{
             fontWeight: view === "chat" ? "bold" : "normal",
             padding: "8px 15px",
             backgroundColor: view === "chat" ? "#3498db" : "#e0e0e0",
@@ -79,10 +111,10 @@ function App() {
         </button>
         <button
           onClick={() => setView("files")}
-          style={{ 
+          style={{
             fontWeight: view === "files" ? "bold" : "normal",
             padding: "8px 15px",
-            backgroundColor: view === "files" ? "#3498db" : "#e0e0e0", 
+            backgroundColor: view === "files" ? "#3498db" : "#e0e0e0",
             color: view === "files" ? "white" : "black",
             border: "none",
             borderRadius: "4px",
@@ -92,7 +124,7 @@ function App() {
           Archivos
         </button>
       </div>
-      {view === "chat" && <ChatSelector token={token} user={user} />} {/* Usar ChatSelector aquí en lugar de Chat */}
+      {view === "chat" && <ChatSelector token={token} user={user} />}
       {view === "files" && <Files token={token} />}
     </div>
   );
