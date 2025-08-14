@@ -1,51 +1,57 @@
-import React, { useState } from "react";
-import { login } from "../api";
+import React, { useState } from 'react';
 
-export default function Login({ setTokenUser, goToRegister }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+const Login = ({ onLogin }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError('');
     try {
-      const res = await login(email, password);
-      // res debe tener { token, user }
-      if (res.error) {
-        setError(res.error);
-        return;
-      }
-      if (res.token && res.user) {
-        setTokenUser(res.token, res.user);
+      const res = await fetch('http://localhost:3001/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token && data.usuario) {
+        onLogin(data); // { usuario, token }
       } else {
-        setError("Login incorrecto.");
+        setError(data.error || 'Credenciales inválidas');
       }
-    } catch (err) {
-      setError("Error de conexión.");
+    } catch {
+      setError('No se pudo conectar al servidor');
     }
   };
 
   return (
-    <div>
-      <h2>Iniciar sesión</h2>
+    <div style={{ maxWidth: 400, margin: 'auto', padding: 20 }}>
+      <h2>Iniciar Sesión</h2>
       <form onSubmit={handleSubmit}>
-        <input
-          type="email"
-          placeholder="Correo"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-        /><br />
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-        /><br />
-        <button type="submit">Entrar</button>
+        <div>
+          <label>Email:</label><br />
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label>Contraseña:</label><br />
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+        <button type="submit" style={{ marginTop: 15 }}>Ingresar</button>
       </form>
-      <button onClick={goToRegister}>Registrarse</button>
-      {error && <p style={{ color: "red" }}>{error}</p>}
     </div>
   );
-}
+};
+
+export default Login;

@@ -1,57 +1,66 @@
-import React, { useState } from "react";
-import { register } from "../api";
+import React, { useState } from 'react';
 
-export default function Register({ goToLogin }) {
-  const [nombre, setNombre] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [rol, setRol] = useState("operador");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+const Register = ({ onRegister }) => {
+  const [nombre, setNombre] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rol, setRol] = useState('usuario'); // default
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  const handleRegister = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
-    const data = await register(nombre, email, password, rol);
-    if (data.message) {
-      setSuccess("Registro exitoso, ahora puedes iniciar sesión.");
-    } else {
-      setError(data.error || "Error al registrarse.");
+    setError('');
+    setSuccess('');
+
+    try {
+      const res = await fetch('http://localhost:3001/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, email, password, rol }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess('Usuario registrado correctamente');
+        onRegister && onRegister(data.usuario);
+      } else {
+        setError(data.error || 'Error al registrar');
+      }
+    } catch {
+      setError('No se pudo conectar al servidor');
     }
   };
 
   return (
-    <div>
-      <h2>Registro</h2>
-      <form onSubmit={handleRegister}>
-        <input
-          type="text"
-          placeholder="Nombre"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-        /><br/>
-        <input
-          type="email"
-          placeholder="Correo"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        /><br/>
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        /><br/>
-        <select value={rol} onChange={e=>setRol(e.target.value)}>
-          <option value="operador">Operador</option>
-          <option value="supervisor">Supervisor</option>
-        </select><br/>
-        <button type="submit">Registrarse</button>
+    <div style={{ maxWidth: 400, margin: 'auto', padding: 20 }}>
+      <h2>Registro de Usuario</h2>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>Nombre:</label><br />
+          <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} required />
+        </div>
+        <div>
+          <label>Email:</label><br />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+        </div>
+        <div>
+          <label>Contraseña:</label><br />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+        </div>
+        <div>
+          <label>Rol:</label><br />
+          <select value={rol} onChange={e => setRol(e.target.value)}>
+            <option value="usuario">Usuario normal</option>
+            <option value="supervisor">Supervisor</option>
+          </select>
+        </div>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {success && <p style={{ color: 'green' }}>{success}</p>}
+        <button type="submit" style={{ marginTop: 15 }}>Registrar</button>
       </form>
-      {error && <p style={{color:'red'}}>{error}</p>}
-      {success && <p style={{color:'green'}}>{success}</p>}
-      <button onClick={goToLogin}>¿Ya tienes cuenta? Inicia sesión</button>
     </div>
   );
-}
+};
+
+export default Register;
