@@ -15,8 +15,9 @@ const Login = ({ onLogin }) => {
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
-      if (res.ok && data.token && data.usuario) {
-        onLogin(data); // { usuario, token }
+      // Cambia data.usuario por data.user
+      if (res.ok && data.token && data.user) {
+        onLogin(data); // { user, token }
       } else {
         setError(data.error || 'Credenciales inválidas');
       }

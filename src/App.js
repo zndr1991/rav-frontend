@@ -7,8 +7,9 @@ function App() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
 
-  const handleLogin = ({ usuario, token }) => {
-    setUser(usuario);
+  // Recibe { user, token } del Login
+  const handleLogin = ({ user, token }) => {
+    setUser(user);
     setToken(token);
   };
 
@@ -24,7 +25,7 @@ function App() {
       ) : (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '20px' }}>
-            <h1>Bienvenido, {user.nombre}</h1>
+            <h1>Hola, {user.nombre}</h1>
             <button onClick={handleLogout}>Cerrar sesión</button>
           </div>
           {user.rol === 'supervisor' ? (
