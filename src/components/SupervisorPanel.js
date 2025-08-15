@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ChatGeneral from './ChatGeneral';
 import { io } from 'socket.io-client';
+import Toasts from './Toasts';
 
 const initialForm = { nombre: '', email: '', password: '', rol: 'usuario' };
 
@@ -11,6 +12,7 @@ function SupervisorPanel({ token, usuario }) {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('usuarios');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
+  const [toasts, setToasts] = useState([]);
 
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
@@ -56,17 +58,63 @@ function SupervisorPanel({ token, usuario }) {
     setError('');
   }, [activeTab]);
 
+  // Solicitar permiso de notificación al montar el componente
+  useEffect(() => {
+    if (window.Notification && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Toast personalizado con mensajeId
+  const showToast = (title, body, mensajeId) => {
+    setToasts(prev => [...prev, { title, body, mensajeId }]);
+    setTimeout(() => setToasts(prev => prev.slice(1)), 4000);
+  };
+
+  // Maneja el click en el toast para ir al chat general y al mensaje
+  const handleToastClick = (mensajeId) => {
+    setActiveTabPersist('chat-general');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensajeId }));
+    }, 200); // Espera a que se monte ChatGeneral
+  };
+
   useEffect(() => {
     fetchSinLeerGeneral();
     const interval = setInterval(fetchSinLeerGeneral, 15000);
 
-    // Socket.IO: actualiza la burbuja al instante
+    // Socket.IO: actualiza la burbuja al instante y muestra notificación
     const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
       transports: ['websocket'],
       autoConnect: true
     });
-    socket.on('nuevo-mensaje', () => {
+    socket.on('nuevo-mensaje', (mensaje) => {
       fetchSinLeerGeneral();
+      // Solo notificar si el mensaje NO es del propio usuario
+      if (mensaje.usuario_id !== usuario.id) {
+        const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
+        if (window.Notification && Notification.permission === 'granted') {
+          const noti = new Notification(`Nuevo mensaje de ${nombreRemitente}`, {
+            body: mensaje.texto,
+            icon: '/icono.png'
+          });
+          noti.onclick = () => {
+            setActiveTabPersist('chat-general');
+            setTimeout(() => {
+              window.focus();
+              window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensaje.id }));
+            }, 200);
+            noti.close();
+          };
+        }
+        // Toast personalizado con mensajeId
+        showToast(`Nuevo mensaje de ${nombreRemitente}`, mensaje.texto, mensaje.id);
+
+        // Si no está en el chat general, guarda el mensaje pendiente
+        if (activeTab !== 'chat-general') {
+          localStorage.setItem('mensajePendiente', mensaje.id);
+        }
+      }
     });
 
     return () => {
@@ -170,6 +218,11 @@ function SupervisorPanel({ token, usuario }) {
 
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>
+      <Toasts
+        toasts={toasts}
+        removeToast={idx => setToasts(prev => prev.filter((_, i) => i !== idx))}
+        onToastClick={handleToastClick}
+      />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 36 }}>
         <div style={{
           minWidth: 400,
