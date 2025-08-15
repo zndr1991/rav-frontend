@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ChatGeneral from './ChatGeneral';
+import { io } from 'socket.io-client';
 
 function UserPanel({ token, usuario }) {
   const [activeTab, setActiveTab] = useState('perfil');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
 
-  // Obtener mensajes sin leer del chat general
   const fetchSinLeerGeneral = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/unread/${usuario.id}`, {
@@ -18,7 +18,30 @@ function UserPanel({ token, usuario }) {
     }
   };
 
-  // Marcar como leídos al abrir el chat general
+  useEffect(() => {
+    if (usuario?.id && token) {
+      fetchSinLeerGeneral();
+
+      // Actualización en tiempo real cada 10 segundos
+      const interval = setInterval(fetchSinLeerGeneral, 10000);
+
+      // Socket.IO: actualiza la burbuja al instante
+      const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
+        transports: ['websocket'],
+        autoConnect: true
+      });
+      socket.on('nuevo-mensaje', () => {
+        fetchSinLeerGeneral();
+      });
+
+      return () => {
+        clearInterval(interval);
+        socket.disconnect();
+      };
+    }
+  }, [usuario?.id, token]);
+
+  // Marcar como leídos al abrir el chat general (esto actualiza ultima_visita_grupal para cualquier usuario)
   const handleChatGeneralClick = async () => {
     setActiveTab('chat-general');
     try {
@@ -39,7 +62,6 @@ function UserPanel({ token, usuario }) {
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 36 }}>
-        {/* Columna izquierda: botones pegados al margen izquierdo */}
         <div style={{
           minWidth: 400,
           display: 'flex',
@@ -124,7 +146,6 @@ function UserPanel({ token, usuario }) {
             Chat privado
           </button>
         </div>
-        {/* Columna derecha: contenido según pestaña */}
         <div style={{ flex: 1 }}>
           {activeTab === 'perfil' && (
             <div>
@@ -139,7 +160,6 @@ function UserPanel({ token, usuario }) {
           )}
           {activeTab === 'chat-privado' && (
             <div>
-              {/* Aquí irá el chat privado en el futuro */}
               <p>Chat privado próximamente.</p>
             </div>
           )}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ChatGeneral from './ChatGeneral';
+import { io } from 'socket.io-client';
 
 const initialForm = { nombre: '', email: '', password: '', rol: 'usuario' };
 
@@ -11,7 +12,17 @@ function SupervisorPanel({ token, usuario }) {
   const [activeTab, setActiveTab] = useState('usuarios');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
 
-  // Obtener lista de usuarios
+  // Persistencia de pestaña activa
+  const setActiveTabPersist = (tab) => {
+    setActiveTab(tab);
+    localStorage.setItem('supervisorActiveTab', tab);
+  };
+
+  useEffect(() => {
+    const savedTab = localStorage.getItem('supervisorActiveTab');
+    if (savedTab) setActiveTab(savedTab);
+  }, []);
+
   const fetchUsuarios = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
@@ -28,7 +39,6 @@ function SupervisorPanel({ token, usuario }) {
     }
   };
 
-  // Cargar los mensajes sin leer del chat general (NO cuenta los propios)
   const fetchSinLeerGeneral = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/unread/${usuario.id}`, {
@@ -49,11 +59,24 @@ function SupervisorPanel({ token, usuario }) {
   useEffect(() => {
     fetchSinLeerGeneral();
     const interval = setInterval(fetchSinLeerGeneral, 15000);
-    return () => clearInterval(interval);
+
+    // Socket.IO: actualiza la burbuja al instante
+    const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
+      transports: ['websocket'],
+      autoConnect: true
+    });
+    socket.on('nuevo-mensaje', () => {
+      fetchSinLeerGeneral();
+    });
+
+    return () => {
+      clearInterval(interval);
+      socket.disconnect();
+    };
   }, [usuario.id, token, activeTab]);
 
   const handleChatGeneralClick = async () => {
-    setActiveTab('chat-general');
+    setActiveTabPersist('chat-general');
     try {
       await fetch(`${process.env.REACT_APP_API_URL}/chat/group/visit`, {
         method: 'POST',
@@ -66,6 +89,25 @@ function SupervisorPanel({ token, usuario }) {
       setSinLeerGeneral(0);
     } catch {
       // Si falla, el globito se queda igual
+    }
+  };
+
+  const handleBorrarChatGeneral = async () => {
+    if (window.confirm('¿Seguro que quieres borrar TODOS los mensajes del chat general?')) {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          alert('Chat general borrado correctamente.');
+          setSinLeerGeneral(0);
+        } else {
+          alert('Error al borrar el chat.');
+        }
+      } catch {
+        alert('No se pudo conectar al servidor.');
+      }
     }
   };
 
@@ -129,14 +171,13 @@ function SupervisorPanel({ token, usuario }) {
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 36 }}>
-        {/* Columna izquierda: botones pegados al margen izquierdo */}
         <div style={{
           minWidth: 400,
           display: 'flex',
           flexDirection: 'column',
           gap: 18,
           alignItems: 'flex-start',
-          marginLeft: 0 // <- pegado al margen!
+          marginLeft: 0
         }}>
           <button
             style={{
@@ -152,28 +193,49 @@ function SupervisorPanel({ token, usuario }) {
               boxShadow: activeTab === 'usuarios' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
               textAlign: 'center'
             }}
-            onClick={() => setActiveTab('usuarios')}
+            onClick={() => setActiveTabPersist('usuarios')}
           >
             Administración de Usuarios
           </button>
-          <button
-            style={{
-              width: 400,
-              padding: '15px 0',
-              background: activeTab === 'chat-general' ? '#007bff' : '#eee',
-              color: activeTab === 'chat-general' ? '#fff' : '#333',
-              border: activeTab === 'chat-general' ? '2px solid #222' : 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: 21,
-              boxShadow: activeTab === 'chat-general' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
-              textAlign: 'center'
-            }}
-            onClick={handleChatGeneralClick}
-          >
-            Chat general
-          </button>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <button
+              style={{
+                width: 400,
+                padding: '15px 0',
+                background: activeTab === 'chat-general' ? '#007bff' : '#eee',
+                color: activeTab === 'chat-general' ? '#fff' : '#333',
+                border: activeTab === 'chat-general' ? '2px solid #222' : 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: 21,
+                boxShadow: activeTab === 'chat-general' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
+                textAlign: 'center'
+              }}
+              onClick={handleChatGeneralClick}
+            >
+              Chat general
+            </button>
+            {sinLeerGeneral > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -12,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: '#21c321',
+                color: '#fff',
+                borderRadius: '30px',
+                padding: '4px 14px',
+                fontWeight: 700,
+                fontSize: 15,
+                minWidth: 22,
+                textAlign: 'center',
+                zIndex: 2
+              }}>
+                {sinLeerGeneral}
+              </span>
+            )}
+          </div>
           <button
             style={{
               width: 400,
@@ -188,12 +250,11 @@ function SupervisorPanel({ token, usuario }) {
               boxShadow: activeTab === 'chat-privado' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
               textAlign: 'center'
             }}
-            onClick={() => setActiveTab('chat-privado')}
+            onClick={() => setActiveTabPersist('chat-privado')}
           >
             Chat privado
           </button>
         </div>
-        {/* Columna derecha: contenido de pestañas */}
         <div style={{ flex: 1 }}>
           {activeTab === 'usuarios' && (
             <div>
@@ -266,7 +327,28 @@ function SupervisorPanel({ token, usuario }) {
           )}
 
           {activeTab === 'chat-general' && (
-            <ChatGeneral token={token} usuario={usuario} />
+            <div>
+              <ChatGeneral token={token} usuario={usuario} />
+              {usuario.rol === 'supervisor' && (
+                <button
+                  style={{
+                    width: 400,
+                    padding: '15px 0',
+                    background: '#dc3545',
+                    color: '#fff',
+                    border: '2px solid #222',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: 21,
+                    marginTop: 18
+                  }}
+                  onClick={handleBorrarChatGeneral}
+                >
+                  Borrar chat general
+                </button>
+              )}
+            </div>
           )}
 
           {activeTab === 'chat-privado' && (
