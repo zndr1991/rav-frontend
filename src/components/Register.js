@@ -4,28 +4,22 @@ const Register = ({ onRegister }) => {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rol, setRol] = useState('usuario'); // default
+  const [rol, setRol] = useState('usuario');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
     try {
-      const res = await fetch('http://localhost:3001/api/users', {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nombre, email, password, rol }),
       });
-
       const data = await res.json();
       if (res.ok) {
-        setSuccess('Usuario registrado correctamente');
-        onRegister && onRegister(data.usuario);
+        onRegister(data);
       } else {
-        setError(data.error || 'Error al registrar');
+        setError(data.message || 'Error al registrar');
       }
     } catch {
       setError('No se pudo conectar al servidor');

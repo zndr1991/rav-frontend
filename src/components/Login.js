@@ -7,19 +7,17 @@ const Login = ({ onLogin }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     try {
-      const res = await fetch('http://localhost:3001/api/users/login', {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
-      // Cambia data.usuario por data.user
-      if (res.ok && data.token && data.user) {
-        onLogin(data); // { user, token }
+      if (res.ok) {
+        onLogin(data);
       } else {
-        setError(data.error || 'Credenciales inválidas');
+        setError(data.message || 'Error al iniciar sesión');
       }
     } catch {
       setError('No se pudo conectar al servidor');

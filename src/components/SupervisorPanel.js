@@ -14,7 +14,7 @@ function SupervisorPanel({ token, usuario }) {
   // Obtener lista de usuarios
   const fetchUsuarios = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/users', {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -31,7 +31,7 @@ function SupervisorPanel({ token, usuario }) {
   // Cargar los mensajes sin leer del chat general (NO cuenta los propios)
   const fetchSinLeerGeneral = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/chat/group/unread/${usuario.id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/unread/${usuario.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -55,7 +55,7 @@ function SupervisorPanel({ token, usuario }) {
   const handleChatGeneralClick = async () => {
     setActiveTab('chat-general');
     try {
-      await fetch('http://localhost:3001/api/chat/group/visit', {
+      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/visit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -74,8 +74,8 @@ function SupervisorPanel({ token, usuario }) {
     setError('');
     try {
       const url = editId
-        ? `http://localhost:3001/api/users/${editId}`
-        : 'http://localhost:3001/api/users/register';
+        ? `${process.env.REACT_APP_API_URL}/users/${editId}`
+        : `${process.env.REACT_APP_API_URL}/users/register`;
       const method = editId ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -101,7 +101,7 @@ function SupervisorPanel({ token, usuario }) {
   const handleDelete = async (id) => {
     if (window.confirm('¿Seguro que quieres borrar este usuario?')) {
       try {
-        const res = await fetch(`http://localhost:3001/api/users/${id}`, {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/users/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });

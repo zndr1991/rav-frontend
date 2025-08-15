@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import ChatGeneral from './ChatGeneral';
 
 function UserPanel({ token, usuario }) {
   const [activeTab, setActiveTab] = useState('perfil');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
 
-  // Cargar los mensajes sin leer del chat general (NO cuenta los propios)
+  // Obtener mensajes sin leer del chat general
   const fetchSinLeerGeneral = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/chat/group/unread/${usuario.id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/unread/${usuario.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -18,17 +18,11 @@ function UserPanel({ token, usuario }) {
     }
   };
 
-  useEffect(() => {
-    fetchSinLeerGeneral();
-    const interval = setInterval(fetchSinLeerGeneral, 15000);
-    return () => clearInterval(interval);
-  }, [usuario.id, token, activeTab]);
-
   // Marcar como leídos al abrir el chat general
   const handleChatGeneralClick = async () => {
     setActiveTab('chat-general');
     try {
-      await fetch('http://localhost:3001/api/chat/group/visit', {
+      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/visit`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

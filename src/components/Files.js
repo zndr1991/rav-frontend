@@ -46,7 +46,11 @@ export default function Files({ token }) {
           <li key={a.id}>
             {a.nombre_original} ({a.autor}) - {new Date(a.fecha).toLocaleString()}
             {" "}
-            <a href={`http://localhost:3001/api/files/download/${a.id}`} target="_blank" rel="noopener noreferrer">
+            <a
+              href={`${process.env.REACT_APP_API_URL}/files/download/${a.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Descargar
             </a>
           </li>

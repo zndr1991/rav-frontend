@@ -14,7 +14,7 @@ function ChatGeneral({ token, usuario }) {
   useEffect(() => {
     async function fetchMensajes() {
       try {
-        const res = await fetch('http://localhost:3001/api/chat/group', {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -35,7 +35,7 @@ function ChatGeneral({ token, usuario }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:3001/api/chat/group', {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
