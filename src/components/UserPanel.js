@@ -50,6 +50,9 @@ function UserPanel({ token, usuario }) {
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensajeId }));
     }, 200); // Espera a que se monte ChatGeneral
+    // Elimina la notificación pendiente
+    localStorage.removeItem('mensajePendiente');
+    localStorage.removeItem('mensajePendienteHora');
   };
 
   useEffect(() => {
@@ -81,14 +84,17 @@ function UserPanel({ token, usuario }) {
                 window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensaje.id }));
               }, 200);
               noti.close();
+              localStorage.removeItem('mensajePendiente');
+              localStorage.removeItem('mensajePendienteHora');
             };
           }
           // Toast personalizado con mensajeId
           showToast(`Nuevo mensaje de ${nombreRemitente}`, mensaje.texto, mensaje.id);
 
-          // Si no está en el chat general, guarda el mensaje pendiente
+          // Si no está en el chat general, guarda el mensaje pendiente y la hora
           if (activeTab !== 'chat-general') {
             localStorage.setItem('mensajePendiente', mensaje.id);
+            localStorage.setItem('mensajePendienteHora', Date.now());
           }
         }
       });
@@ -99,6 +105,23 @@ function UserPanel({ token, usuario }) {
       };
     }
   }, [usuario?.id, token, activeTab]);
+
+  // Revisa cada minuto si hay una notificación pendiente sin atender
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const mensajePendiente = localStorage.getItem('mensajePendiente');
+      const horaPendiente = localStorage.getItem('mensajePendienteHora');
+      if (mensajePendiente && horaPendiente) {
+        const minutos = (Date.now() - Number(horaPendiente)) / 60000;
+        if (minutos >= 3) {
+          showToast('Tienes un mensaje sin atender', 'Haz clic para ir al mensaje', mensajePendiente);
+          localStorage.setItem('mensajePendienteHora', Date.now());
+        }
+      }
+    }, 60000); // cada minuto
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Marcar como leídos al abrir el chat general
   const handleChatGeneralClick = async () => {
@@ -113,6 +136,9 @@ function UserPanel({ token, usuario }) {
         body: JSON.stringify({ usuario_id: usuario.id })
       });
       setSinLeerGeneral(0);
+      // Elimina la notificación pendiente al abrir el chat
+      localStorage.removeItem('mensajePendiente');
+      localStorage.removeItem('mensajePendienteHora');
     } catch {
       // Si falla, el globito se queda igual
     }
