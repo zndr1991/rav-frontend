@@ -349,7 +349,7 @@ function ChatGeneral({ token, usuario }) {
               </div>
             )}
             <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
-              {msg.fecha ? new Date(msg.fecha).toLocaleString() : ''}
+              {msg.fecha ? new Date(msg.fecha).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }) : ''}
             </div>
             <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
               {puedeEditar(msg) && (
@@ -407,25 +407,6 @@ function ChatGeneral({ token, usuario }) {
           Enviar
         </button>
       </form>
-      {/* Solo NO supervisores ven el botón */}
-      {usuario.rol !== 'supervisor' && (
-        <button
-          style={{
-            width: 400,
-            padding: '15px 0',
-            background: 'rgb(220, 53, 69)',
-            color: 'rgb(255, 255, 255)',
-            border: '2px solid rgb(34, 34, 34)',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            fontSize: 21,
-            marginTop: 18
-          }}
-        >
-          Borrar chat general
-        </button>
-      )}
     </div>
   );
 }

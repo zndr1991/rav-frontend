@@ -164,25 +164,6 @@ function SupervisorPanel({ token, usuario }) {
     }
   };
 
-  const handleBorrarChatGeneral = async () => {
-    if (window.confirm('¿Seguro que quieres borrar TODOS los mensajes del chat general?')) {
-      try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          alert('Chat general borrado correctamente.');
-          setSinLeerGeneral(0);
-        } else {
-          alert('Error al borrar el chat.');
-        }
-      } catch {
-        alert('No se pudo conectar al servidor.');
-      }
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -406,32 +387,14 @@ function SupervisorPanel({ token, usuario }) {
           {activeTab === 'chat-general' && (
             <div>
               <ChatGeneral token={token} usuario={usuario} />
-              {usuario.rol === 'supervisor' && (
-                <button
-                  style={{
-                    width: 400,
-                    padding: '15px 0',
-                    background: '#dc3545',
-                    color: '#fff',
-                    border: '2px solid #222',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: 21,
-                    marginTop: 18
-                  }}
-                  onClick={handleBorrarChatGeneral}
-                >
-                  Borrar chat general
-                </button>
-              )}
+              {/* El botón "Borrar chat general" ha sido eliminado */}
             </div>
           )}
 
           {activeTab === 'chat-privado' && (
             <div>
               {/* Aquí irá el chat privado en el futuro */}
-             </div>
+            </div>
           )}
         </div>
       </div>
