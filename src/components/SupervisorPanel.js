@@ -58,41 +58,34 @@ function SupervisorPanel({ token, usuario }) {
     setError('');
   }, [activeTab]);
 
-  // Solicitar permiso de notificación al montar el componente
   useEffect(() => {
     if (window.Notification && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
   }, []);
 
-  // Toast personalizado con mensajeId
   const showToast = (title, body, mensajeId) => {
     setToasts(prev => [...prev, { title, body, mensajeId }]);
     setTimeout(() => setToasts(prev => prev.slice(1)), 4000);
   };
 
-  // Maneja el click en el toast para ir al chat general y al mensaje
   const handleToastClick = (mensajeId) => {
     setActiveTabPersist('chat-general');
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensajeId }));
-    }, 200); // Espera a que se monte ChatGeneral
-    localStorage.removeItem('mensajePendiente');
-    localStorage.removeItem('mensajePendienteHora');
+    }, 200);
   };
 
   useEffect(() => {
     fetchSinLeerGeneral();
     const interval = setInterval(fetchSinLeerGeneral, 15000);
 
-    // Socket.IO: actualiza la burbuja al instante y muestra notificación
     const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
       transports: ['websocket'],
       autoConnect: true
     });
     socket.on('nuevo-mensaje', (mensaje) => {
       fetchSinLeerGeneral();
-      // Solo notificar si el mensaje NO es del propio usuario
       if (mensaje.usuario_id !== usuario.id) {
         const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
         if (window.Notification && Notification.permission === 'granted') {
@@ -107,17 +100,12 @@ function SupervisorPanel({ token, usuario }) {
               window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensaje.id }));
             }, 200);
             noti.close();
-            localStorage.removeItem('mensajePendiente');
-            localStorage.removeItem('mensajePendienteHora');
           };
         }
-        // Toast personalizado con mensajeId
         showToast(`Nuevo mensaje de ${nombreRemitente}`, mensaje.texto, mensaje.id);
 
-        // Si no está en el chat general, guarda el mensaje pendiente y la hora
         if (activeTab !== 'chat-general') {
           localStorage.setItem('mensajePendiente', mensaje.id);
-          localStorage.setItem('mensajePendienteHora', Date.now());
         }
       }
     });
@@ -127,23 +115,6 @@ function SupervisorPanel({ token, usuario }) {
       socket.disconnect();
     };
   }, [usuario.id, token, activeTab]);
-
-  // Revisa cada minuto si hay una notificación pendiente sin atender
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const mensajePendiente = localStorage.getItem('mensajePendiente');
-      const horaPendiente = localStorage.getItem('mensajePendienteHora');
-      if (mensajePendiente && horaPendiente) {
-        const minutos = (Date.now() - Number(horaPendiente)) / 60000;
-        if (minutos >= 3) {
-          showToast('Tienes un mensaje sin atender', 'Haz clic para ir al mensaje', mensajePendiente);
-          localStorage.setItem('mensajePendienteHora', Date.now());
-        }
-      }
-    }, 60000); // cada minuto
-
-    return () => clearInterval(interval);
-  }, []);
 
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
@@ -157,10 +128,25 @@ function SupervisorPanel({ token, usuario }) {
         body: JSON.stringify({ usuario_id: usuario.id })
       });
       setSinLeerGeneral(0);
-      localStorage.removeItem('mensajePendiente');
-      localStorage.removeItem('mensajePendienteHora');
-    } catch {
-      // Si falla, el globito se queda igual
+    } catch {}
+  };
+
+  const handleBorrarChatGeneral = async () => {
+    if (window.confirm('¿Seguro que quieres borrar TODOS los mensajes del chat general?')) {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          alert('Chat general borrado correctamente.');
+          setSinLeerGeneral(0);
+        } else {
+          alert('Error al borrar el chat.');
+        }
+      } catch {
+        alert('No se pudo conectar al servidor.');
+      }
     }
   };
 
@@ -230,24 +216,27 @@ function SupervisorPanel({ token, usuario }) {
       />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 36 }}>
         <div style={{
-          minWidth: 400,
+          width: 160,
+          minWidth: 120,
           display: 'flex',
           flexDirection: 'column',
-          gap: 18,
+          gap: 12,
           alignItems: 'flex-start',
-          marginLeft: 0
+          marginLeft: 0,
+          position: 'sticky',
+          top: 40
         }}>
           <button
             style={{
-              width: 400,
-              padding: '15px 0',
+              width: 120,
+              padding: '8px 0',
               background: activeTab === 'usuarios' ? '#007bff' : '#eee',
               color: activeTab === 'usuarios' ? '#fff' : '#333',
               border: activeTab === 'usuarios' ? '2px solid #222' : 'none',
               borderRadius: 8,
               cursor: 'pointer',
               fontWeight: 'bold',
-              fontSize: 21,
+              fontSize: 16,
               boxShadow: activeTab === 'usuarios' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
               textAlign: 'center'
             }}
@@ -258,15 +247,15 @@ function SupervisorPanel({ token, usuario }) {
           <div style={{ position: 'relative', width: '100%' }}>
             <button
               style={{
-                width: 400,
-                padding: '15px 0',
+                width: 120,
+                padding: '8px 0',
                 background: activeTab === 'chat-general' ? '#007bff' : '#eee',
                 color: activeTab === 'chat-general' ? '#fff' : '#333',
                 border: activeTab === 'chat-general' ? '2px solid #222' : 'none',
                 borderRadius: 8,
                 cursor: 'pointer',
                 fontWeight: 'bold',
-                fontSize: 21,
+                fontSize: 16,
                 boxShadow: activeTab === 'chat-general' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
                 textAlign: 'center'
               }}
@@ -277,15 +266,15 @@ function SupervisorPanel({ token, usuario }) {
             {sinLeerGeneral > 0 && (
               <span style={{
                 position: 'absolute',
-                top: -12,
+                top: -8,
                 left: '50%',
                 transform: 'translateX(-50%)',
                 background: '#21c321',
                 color: '#fff',
-                borderRadius: '30px',
-                padding: '4px 14px',
+                borderRadius: '20px',
+                padding: '2px 8px',
                 fontWeight: 700,
-                fontSize: 15,
+                fontSize: 14,
                 minWidth: 22,
                 textAlign: 'center',
                 zIndex: 2
@@ -296,15 +285,15 @@ function SupervisorPanel({ token, usuario }) {
           </div>
           <button
             style={{
-              width: 400,
-              padding: '15px 0',
+              width: 120,
+              padding: '8px 0',
               background: activeTab === 'chat-privado' ? '#007bff' : '#eee',
               color: activeTab === 'chat-privado' ? '#fff' : '#333',
               border: activeTab === 'chat-privado' ? '2px solid #222' : 'none',
               borderRadius: 8,
               cursor: 'pointer',
               fontWeight: 'bold',
-              fontSize: 21,
+              fontSize: 16,
               boxShadow: activeTab === 'chat-privado' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
               textAlign: 'center'
             }}
@@ -387,7 +376,7 @@ function SupervisorPanel({ token, usuario }) {
           {activeTab === 'chat-general' && (
             <div>
               <ChatGeneral token={token} usuario={usuario} />
-              {/* El botón "Borrar chat general" ha sido eliminado */}
+              {/* Botón de borrar chat general eliminado */}
             </div>
           )}
 
