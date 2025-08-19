@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-function ChatGeneral({ token, usuario }) {
+function ChatPrivado({ token, usuario, socket, destinatario }) {
   const [mensajes, setMensajes] = useState([]);
   const [mensajeTexto, setMensajeTexto] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -16,22 +15,23 @@ function ChatGeneral({ token, usuario }) {
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const scrollRef = useRef(null);
-  const socketRef = useRef(null);
-  const usuariosEnLineaRef = useRef([]);
 
+  // Estado en línea persistente por usuario
   const estadoInicial = localStorage.getItem(`enLinea_${usuario.id}`) === 'true';
   const [enLinea, setEnLinea] = useState(estadoInicial);
 
   const textareaRef = useRef(null);
   const editTextareaRef = useRef(null);
 
+  // Cargar mensajes privados entre usuario y destinatario
   const fetchMensajes = async () => {
     setCargando(true);
     setError('');
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetch(
+        `${process.env.REACT_APP_API_URL}/chat/private?usuario_id=${usuario.id}&destinatario_id=${destinatario.id}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
       const data = await res.json();
       setMensajes(data || []);
     } catch (err) {
@@ -43,22 +43,25 @@ function ChatGeneral({ token, usuario }) {
   };
 
   useEffect(() => {
-    fetchMensajes();
-  }, [token]);
+    if (destinatario?.id) fetchMensajes();
+  }, [token, destinatario]);
 
+  // Socket.IO para tiempo real
   useEffect(() => {
-    socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
-      transports: ['websocket'],
-      autoConnect: true,
-      auth: { token }
+    if (!socket) return;
+
+    socket.on('nuevo-mensaje-privado', (mensaje) => {
+      // Solo agrega si es entre los dos usuarios
+      if (
+        (mensaje.remitente_id === usuario.id && mensaje.destinatario_id === destinatario.id) ||
+        (mensaje.remitente_id === destinatario.id && mensaje.destinatario_id === usuario.id)
+      ) {
+        setMensajes(prev => [...prev, mensaje]);
+        setAutoScroll(true);
+      }
     });
 
-    socketRef.current.on('nuevo-mensaje', (mensaje) => {
-      setMensajes(prev => [...prev, mensaje]);
-      setAutoScroll(true);
-    });
-
-    socketRef.current.on('mensaje-editado', (msgEditado) => {
+    socket.on('mensaje-editado-privado', (msgEditado) => {
       setMensajes(prev =>
         prev.map(m =>
           m.id === msgEditado.id ? { ...m, ...msgEditado } : m
@@ -66,64 +69,22 @@ function ChatGeneral({ token, usuario }) {
       );
     });
 
-    socketRef.current.on('usuarios-en-linea', (usuarios) => {
-      const prevUsuarios = usuariosEnLineaRef.current;
-      const desconectados = prevUsuarios.filter(
-        prev => !usuarios.some(u => u.usuario_id === prev.usuario_id)
-      );
-      desconectados.forEach(u => {
-        if (u.usuario_id !== usuario.id) {
-          toast.info(`${u.nombre} se ha desconectado`, {
-            position: 'top-right',
-            autoClose: 2500
-          });
-        }
-      });
-      const nuevos = usuarios.filter(u =>
-        !prevUsuarios.some(prev => prev.usuario_id === u.usuario_id)
-        && u.usuario_id !== usuario.id
-      );
-      nuevos.forEach(u => {
-        toast.success(`${u.nombre} se ha conectado`, {
-          position: 'top-right',
-          autoClose: 2500
-        });
-      });
+    socket.on('usuarios-en-linea', (usuarios) => {
       setUsuariosEnLinea(usuarios);
-      usuariosEnLineaRef.current = usuarios;
     });
 
-    socketRef.current.on('connect', () => {
-      socketRef.current.emit('usuario-en-linea', {
-        usuario_id: usuario.id,
-        nombre: usuario.nombre,
-        enLinea
-      });
-    });
-
-    // --- Escuchar el evento de borrado en tiempo real ---
-    socketRef.current.on('chat-general-borrado', () => {
-      setMensajes([]);
-      toast.info('El chat general ha sido borrado.', {
-        position: 'top-right',
-        autoClose: 2500
-      });
-      console.log('Evento chat-general-borrado recibido');
-    });
-
-    // --- Escuchar el evento de borrado de mensaje individual ---
-    socketRef.current.on('mensaje-borrado', (mensajeId) => {
-      console.log('Recibido mensaje-borrado', mensajeId);
-      setMensajes(prev => prev.filter(m => String(m.id) !== String(mensajeId)));
+    socket.emit('usuario-en-linea', {
+      usuario_id: usuario.id,
+      nombre: usuario.nombre,
+      enLinea: enLinea
     });
 
     return () => {
-      if (enLinea) {
-        socketRef.current.emit('usuario-en-linea', { usuario_id: usuario.id, nombre: usuario.nombre, enLinea: false });
-      }
-      socketRef.current.disconnect();
+      socket.off('nuevo-mensaje-privado');
+      socket.off('mensaje-editado-privado');
+      socket.off('usuarios-en-linea');
     };
-  }, [token, usuario.id, usuario.nombre]);
+  }, [socket, usuario.id, usuario.nombre, destinatario, enLinea]);
 
   useEffect(() => {
     localStorage.setItem(`enLinea_${usuario.id}`, enLinea ? 'true' : 'false');
@@ -131,8 +92,8 @@ function ChatGeneral({ token, usuario }) {
 
   const cambiarEstadoLinea = (nuevoEstado) => {
     setEnLinea(nuevoEstado);
-    if (socketRef.current) {
-      socketRef.current.emit('usuario-en-linea', { usuario_id: usuario.id, nombre: usuario.nombre, enLinea: nuevoEstado });
+    if (socket) {
+      socket.emit('usuario-en-linea', { usuario_id: usuario.id, nombre: usuario.nombre, enLinea: nuevoEstado });
     }
     toast[nuevoEstado ? 'success' : 'info'](
       nuevoEstado ? '¡Estás en línea!' : 'Ahora estás fuera de línea',
@@ -194,15 +155,15 @@ function ChatGeneral({ token, usuario }) {
     if (!texto) return;
     setError('');
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          usuario_id: usuario.id,
-          nombre_usuario: usuario.nombre,
+          remitente_id: usuario.id,
+          destinatario_id: destinatario.id,
           texto
         })
       });
@@ -221,11 +182,13 @@ function ChatGeneral({ token, usuario }) {
   const borrarMensaje = async (id) => {
     if (!window.confirm('¿Seguro que quieres borrar este mensaje?')) return;
     try {
-      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/${id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      // No uses setMensajes aquí, el evento socket lo hará en tiempo real
+      if (res.ok) {
+        setMensajes(prev => prev.filter(m => m.id !== id));
+      }
     } catch {
       setError('No se pudo borrar el mensaje.');
     }
@@ -245,7 +208,7 @@ function ChatGeneral({ token, usuario }) {
   const guardarEdicion = async (id) => {
     if (!editandoTexto.trim()) return;
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/${id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -262,11 +225,11 @@ function ChatGeneral({ token, usuario }) {
   };
 
   const puedeBorrar = (msg) =>
-    usuario.rol === 'supervisor' || usuario.id === msg.usuario_id;
+    usuario.rol === 'supervisor' || usuario.id === msg.remitente_id;
 
   const puedeEditar = (msg) =>
-    usuario.id === msg.usuario_id ||
-    (usuario.rol === 'supervisor' && usuario.id === msg.usuario_id);
+    usuario.id === msg.remitente_id ||
+    (usuario.rol === 'supervisor' && usuario.id === msg.remitente_id);
 
   return (
     <div>
@@ -294,6 +257,7 @@ function ChatGeneral({ token, usuario }) {
           }
         `}
       </style>
+      {/* Botón de estado en línea separado */}
       <div style={{ marginBottom: 16 }}>
         <button
           onClick={() => cambiarEstadoLinea(!enLinea)}
@@ -311,6 +275,7 @@ function ChatGeneral({ token, usuario }) {
           {enLinea ? 'En Línea' : 'Desconectado'}
         </button>
       </div>
+      {/* Sección de usuarios en línea separada */}
       <div style={{
         marginBottom: 16,
         padding: 10,
@@ -359,7 +324,7 @@ function ChatGeneral({ token, usuario }) {
             className={msg.id === mensajeParpadeoId ? 'mensaje-parpadeo' : ''}
             style={{
               marginBottom: 12,
-              background: msg.usuario_id === usuario.id ? '#e6f7ff' : '#fff',
+              background: msg.remitente_id === usuario.id ? '#e6f7ff' : '#fff',
               borderRadius: 6,
               padding: 8,
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -369,7 +334,7 @@ function ChatGeneral({ token, usuario }) {
             onMouseLeave={() => setHoveredMsgId(null)}
           >
             <div style={{ fontWeight: 'bold', color: '#007bff' }}>
-              {msg.nombre_usuario || msg.nombre || msg.autor || 'Desconocido'}
+              {msg.remitente_id === usuario.id ? usuario.nombre : destinatario.nombre}
             </div>
             <div style={{ position: 'relative' }}>
               {editandoId === msg.id ? (
@@ -505,4 +470,4 @@ function ChatGeneral({ token, usuario }) {
   );
 }
 
-export default ChatGeneral;
+export default ChatPrivado;

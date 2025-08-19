@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ChatGeneral from './ChatGeneral';
+import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
 import Toasts from './Toasts';
 
@@ -7,6 +8,9 @@ function UserPanel({ token, usuario }) {
   const [activeTab, setActiveTab] = useState('perfil');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
   const [toasts, setToasts] = useState([]);
+  const [destinatario, setDestinatario] = useState(null);
+  const [usuarios, setUsuarios] = useState([]);
+  const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
 
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
@@ -30,6 +34,33 @@ function UserPanel({ token, usuario }) {
       setSinLeerGeneral(0);
     }
   };
+
+  const fetchUsuarios = async () => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      console.log('Usuarios:', data); // <-- Para depuración
+      if (res.ok) {
+        setUsuarios(data);
+      } else {
+        setUsuarios([]);
+      }
+    } catch {
+      setUsuarios([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsuarios();
+  }, [token]);
+
+  useEffect(() => {
+    if (activeTab === 'chat-privado') {
+      fetchUsuarios();
+    }
+  }, [activeTab, token]);
 
   useEffect(() => {
     if (window.Notification && Notification.permission !== 'granted') {
@@ -59,6 +90,11 @@ function UserPanel({ token, usuario }) {
         transports: ['websocket'],
         autoConnect: true
       });
+
+      socket.on('usuarios-en-linea', (usuarios) => {
+        setUsuariosEnLinea(usuarios);
+      });
+
       socket.on('nuevo-mensaje', (mensaje) => {
         fetchSinLeerGeneral();
         if (mensaje.usuario_id !== usuario.id) {
@@ -105,6 +141,12 @@ function UserPanel({ token, usuario }) {
       });
       setSinLeerGeneral(0);
     } catch {}
+  };
+
+  // Selección de destinatario para chat privado (muestra todos los usuarios)
+  const handleSelectDestinatario = (user) => {
+    setDestinatario(user);
+    setActiveTabPersist('chat-privado');
   };
 
   return (
@@ -216,7 +258,54 @@ function UserPanel({ token, usuario }) {
           )}
           {activeTab === 'chat-privado' && (
             <div>
-              <p>Chat privado próximamente.</p>
+              <h3>Selecciona un usuario para chatear en privado:</h3>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+                {usuarios
+                  .filter(u => u.id !== usuario.id)
+                  .map(u => {
+                    const enLinea = usuariosEnLinea.some(ul => ul.usuario_id === u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        style={{
+                          padding: '6px 14px',
+                          background: destinatario?.id === u.id ? '#007bff' : '#e6f7ff',
+                          color: destinatario?.id === u.id ? '#fff' : '#007bff',
+                          border: '1px solid #007bff',
+                          borderRadius: 6,
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8
+                        }}
+                        onClick={() => handleSelectDestinatario(u)}
+                      >
+                        {u.nombre}
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            background: enLinea ? '#28a745' : '#ccc',
+                            display: 'inline-block'
+                          }}
+                          title={enLinea ? 'En línea' : 'Desconectado'}
+                        ></span>
+                      </button>
+                    );
+                  })}
+              </div>
+              {destinatario ? (
+                <ChatPrivado
+                  token={token}
+                  usuario={usuario}
+                  socket={null}
+                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
+                />
+              ) : (
+                <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>
+              )}
             </div>
           )}
         </div>

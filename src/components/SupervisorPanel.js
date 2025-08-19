@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ChatGeneral from './ChatGeneral';
+import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
 import Toasts from './Toasts';
 
@@ -13,6 +14,8 @@ function SupervisorPanel({ token, usuario }) {
   const [activeTab, setActiveTab] = useState('usuarios');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
   const [toasts, setToasts] = useState([]);
+  const [destinatario, setDestinatario] = useState(null);
+  const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
 
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
@@ -84,6 +87,11 @@ function SupervisorPanel({ token, usuario }) {
       transports: ['websocket'],
       autoConnect: true
     });
+
+    socket.on('usuarios-en-linea', (usuarios) => {
+      setUsuariosEnLinea(usuarios);
+    });
+
     socket.on('nuevo-mensaje', (mensaje) => {
       fetchSinLeerGeneral();
       if (mensaje.usuario_id !== usuario.id) {
@@ -205,6 +213,12 @@ function SupervisorPanel({ token, usuario }) {
   const handleCancelEdit = () => {
     setForm(initialForm);
     setEditId(null);
+  };
+
+  // Selección de destinatario para chat privado (ahora muestra todos los usuarios)
+  const handleSelectDestinatario = (user) => {
+    setDestinatario(user);
+    setActiveTabPersist('chat-privado');
   };
 
   return (
@@ -376,13 +390,59 @@ function SupervisorPanel({ token, usuario }) {
           {activeTab === 'chat-general' && (
             <div>
               <ChatGeneral token={token} usuario={usuario} />
-              {/* Botón de borrar chat general eliminado */}
             </div>
           )}
 
           {activeTab === 'chat-privado' && (
             <div>
-              {/* Aquí irá el chat privado en el futuro */}
+              <h3>Selecciona un usuario para chatear en privado:</h3>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+                {usuarios
+                  .filter(u => u.id !== usuario.id)
+                  .map(u => {
+                    const enLinea = usuariosEnLinea.some(ul => ul.usuario_id === u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        style={{
+                          padding: '6px 14px',
+                          background: destinatario?.id === u.id ? '#007bff' : '#e6f7ff',
+                          color: destinatario?.id === u.id ? '#fff' : '#007bff',
+                          border: '1px solid #007bff',
+                          borderRadius: 6,
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8
+                        }}
+                        onClick={() => handleSelectDestinatario(u)}
+                      >
+                        {u.nombre}
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            background: enLinea ? '#28a745' : '#ccc',
+                            display: 'inline-block'
+                          }}
+                          title={enLinea ? 'En línea' : 'Desconectado'}
+                        ></span>
+                      </button>
+                    );
+                  })}
+              </div>
+              {destinatario ? (
+                <ChatPrivado
+                  token={token}
+                  usuario={usuario}
+                  socket={null}
+                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
+                />
+              ) : (
+                <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>
+              )}
             </div>
           )}
         </div>
