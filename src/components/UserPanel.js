@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ChatGeneral from './ChatGeneral';
 import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
@@ -146,8 +146,23 @@ function UserPanel({ token, usuario }) {
   // Selección de destinatario para chat privado (muestra todos los usuarios)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
+    localStorage.setItem('userpanelDestinatarioId', user.id);
     setActiveTabPersist('chat-privado');
   };
+  // Restaurar destinatario guardado solo cuando usuarios estén listos
+  useEffect(() => {
+    const savedDestId = localStorage.getItem('userpanelDestinatarioId');
+    if (savedDestId && usuarios && usuarios.length > 0) {
+      const user = usuarios.find(u => String(u.id) === String(savedDestId));
+      if (user) setDestinatario(user);
+    }
+  }, [usuarios]);
+
+  // Memoizar destinatario para evitar recreación constante
+  const destinatarioMemo = useMemo(() => {
+    if (!destinatario) return null;
+    return { id: destinatario.id, nombre: destinatario.nombre };
+  }, [destinatario?.id, destinatario?.nombre]);
 
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>
@@ -301,7 +316,7 @@ function UserPanel({ token, usuario }) {
                   token={token}
                   usuario={usuario}
                   socket={null}
-                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
+                  destinatario={destinatarioMemo}
                 />
               ) : (
                 <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>

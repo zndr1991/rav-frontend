@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import ChatGeneral from './ChatGeneral';
 import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
@@ -17,6 +17,12 @@ function SupervisorPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
 
+  // Memoizar destinatario para evitar recreación constante
+  const destinatarioMemo = useMemo(() => {
+    if (!destinatario) return null;
+    return { id: destinatario.id, nombre: destinatario.nombre };
+  }, [destinatario?.id, destinatario?.nombre]);
+
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
@@ -27,6 +33,15 @@ function SupervisorPanel({ token, usuario }) {
     const savedTab = localStorage.getItem('supervisorActiveTab');
     if (savedTab) setActiveTab(savedTab);
   }, []);
+
+  // Restaurar destinatario guardado solo cuando usuarios estén listos
+  useEffect(() => {
+    const savedDestId = localStorage.getItem('supervisorDestinatarioId');
+    if (savedDestId && usuarios.length > 0) {
+      const user = usuarios.find(u => String(u.id) === String(savedDestId));
+      if (user) setDestinatario(user);
+    }
+  }, [usuarios]);
 
   const fetchUsuarios = async () => {
     try {
@@ -218,6 +233,7 @@ function SupervisorPanel({ token, usuario }) {
   // Selección de destinatario para chat privado (ahora muestra todos los usuarios)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
+    localStorage.setItem('supervisorDestinatarioId', user.id);
     setActiveTabPersist('chat-privado');
   };
 
@@ -438,7 +454,7 @@ function SupervisorPanel({ token, usuario }) {
                   token={token}
                   usuario={usuario}
                   socket={null}
-                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
+                  destinatario={destinatarioMemo}
                 />
               ) : (
                 <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>
