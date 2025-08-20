@@ -16,14 +16,15 @@ function SupervisorPanel({ token, usuario }) {
   const [toasts, setToasts] = useState([]);
   const [destinatario, setDestinatario] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
+  const [usuariosTodos, setUsuariosTodos] = useState([]);
+  const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
+  const socketRef = React.useRef(null);
 
-  // Memoizar destinatario para evitar recreación constante
   const destinatarioMemo = useMemo(() => {
     if (!destinatario) return null;
     return { id: destinatario.id, nombre: destinatario.nombre };
   }, [destinatario?.id, destinatario?.nombre]);
 
-  // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
     localStorage.setItem('supervisorActiveTab', tab);
@@ -34,7 +35,6 @@ function SupervisorPanel({ token, usuario }) {
     if (savedTab) setActiveTab(savedTab);
   }, []);
 
-  // Restaurar destinatario guardado solo cuando usuarios estén listos
   useEffect(() => {
     const savedDestId = localStorage.getItem('supervisorDestinatarioId');
     if (savedDestId && usuarios.length > 0) {
@@ -43,6 +43,7 @@ function SupervisorPanel({ token, usuario }) {
     }
   }, [usuarios]);
 
+  // Obtener todos los usuarios
   const fetchUsuarios = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
@@ -51,10 +52,15 @@ function SupervisorPanel({ token, usuario }) {
       const data = await res.json();
       if (res.ok) {
         setUsuarios(data);
+        setUsuariosTodos(data);
       } else {
+        setUsuarios([]);
+        setUsuariosTodos([]);
         setError(data.error || 'No se pudo cargar usuarios');
       }
     } catch {
+      setUsuarios([]);
+      setUsuariosTodos([]);
       setError('No se pudo cargar usuarios');
     }
   };
@@ -94,50 +100,71 @@ function SupervisorPanel({ token, usuario }) {
     }, 200);
   };
 
+  // Mantener el socket abierto y emitir en línea al conectar
   useEffect(() => {
-    fetchSinLeerGeneral();
-    const interval = setInterval(fetchSinLeerGeneral, 15000);
+    if (usuario?.id && token) {
+      socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
+        transports: ['websocket'],
+        autoConnect: true
+      });
 
-    const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
-      transports: ['websocket'],
-      autoConnect: true
-    });
+      socketRef.current.on('connect', () => {
+        socketRef.current.emit('usuario-en-linea', {
+          usuario_id: usuario.id,
+          nombre: usuario.nombre,
+          enLinea: true
+        });
+      });
 
-    socket.on('usuarios-en-linea', (usuarios) => {
-      setUsuariosEnLinea(usuarios);
-    });
+      socketRef.current.on('usuarios-en-linea', (usuarios) => {
+        setUsuariosEnLinea(usuarios);
+      });
 
-    socket.on('nuevo-mensaje', (mensaje) => {
-      fetchSinLeerGeneral();
-      if (mensaje.usuario_id !== usuario.id) {
-        const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
-        if (window.Notification && Notification.permission === 'granted') {
-          const noti = new Notification(`Nuevo mensaje de ${nombreRemitente}`, {
-            body: mensaje.texto,
-            icon: '/icono.png'
+      socketRef.current.on('nuevo-mensaje', (mensaje) => {
+        fetchSinLeerGeneral();
+        if (mensaje.usuario_id !== usuario.id) {
+          const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
+          if (window.Notification && Notification.permission === 'granted') {
+            const noti = new Notification(`Nuevo mensaje de ${nombreRemitente}`, {
+              body: mensaje.texto,
+              icon: '/icono.png'
+            });
+            noti.onclick = () => {
+              setActiveTabPersist('chat-general');
+              setTimeout(() => {
+                window.focus();
+                window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensaje.id }));
+              }, 200);
+              noti.close();
+            };
+          }
+          showToast(`Nuevo mensaje de ${nombreRemitente}`, mensaje.texto, mensaje.id);
+
+          if (activeTab !== 'chat-general') {
+            localStorage.setItem('mensajePendiente', mensaje.id);
+          }
+        }
+      });
+
+      // Emitir desconectado al salir/cerrar la app
+      const handleUnload = () => {
+        if (socketRef.current) {
+          socketRef.current.emit('usuario-en-linea', {
+            usuario_id: usuario.id,
+            nombre: usuario.nombre,
+            enLinea: false
           });
-          noti.onclick = () => {
-            setActiveTabPersist('chat-general');
-            setTimeout(() => {
-              window.focus();
-              window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensaje.id }));
-            }, 200);
-            noti.close();
-          };
+          socketRef.current.disconnect();
         }
-        showToast(`Nuevo mensaje de ${nombreRemitente}`, mensaje.texto, mensaje.id);
+      };
+      window.addEventListener('beforeunload', handleUnload);
 
-        if (activeTab !== 'chat-general') {
-          localStorage.setItem('mensajePendiente', mensaje.id);
-        }
-      }
-    });
-
-    return () => {
-      clearInterval(interval);
-      socket.disconnect();
-    };
-  }, [usuario.id, token, activeTab]);
+      return () => {
+        handleUnload();
+        window.removeEventListener('beforeunload', handleUnload);
+      };
+    }
+  }, [usuario?.id, token]);
 
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
@@ -230,12 +257,132 @@ function SupervisorPanel({ token, usuario }) {
     setEditId(null);
   };
 
-  // Selección de destinatario para chat privado (ahora muestra todos los usuarios)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
     localStorage.setItem('supervisorDestinatarioId', user.id);
     setActiveTabPersist('chat-privado');
   };
+
+  // Cambiar estado en línea manualmente al hacer clic en el icono
+  const cambiarEstadoLineaManual = () => {
+    const nuevoEstado = !enLinea;
+    setEnLinea(nuevoEstado);
+    localStorage.setItem(`enLinea_${usuario.id}`, nuevoEstado ? 'true' : 'false');
+    if (socketRef.current) {
+      socketRef.current.emit('usuario-en-linea', {
+        usuario_id: usuario.id,
+        nombre: usuario.nombre,
+        enLinea: nuevoEstado
+      });
+    }
+  };
+
+  // Panel de usuarios conectados y desconectados (por fuera de las pestañas)
+  const renderUsuariosPanel = () => {
+    const conectadosIds = usuariosEnLinea.map(u => u.usuario_id);
+    const conectados = usuariosTodos.filter(u => conectadosIds.includes(u.id));
+    const desconectados = usuariosTodos.filter(u => !conectadosIds.includes(u.id));
+
+    return (
+      <div style={{
+        background: '#f8f9fa',
+        border: '1px solid #ddd',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 18,
+        minWidth: 120,
+        maxWidth: 120,
+        width: 120,
+        boxSizing: 'border-box'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', fontSize: 15, color: '#007bff', textAlign: 'center' }}>Usuarios</h4>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {conectados.map(u => (
+            <li key={u.id} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 6,
+              fontSize: 14
+            }}>
+              <span title="En línea" style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: '#28a745',
+                display: 'inline-block'
+              }}></span>
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: 80
+              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
+            </li>
+          ))}
+          {desconectados.map(u => (
+            <li key={u.id} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 6,
+              fontSize: 14
+            }}>
+              <span title="Desconectado" style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: '#ccc',
+                display: 'inline-block'
+              }}></span>
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: 80
+              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  // Icono de estado en línea/desconectado arriba de administración, clickeable
+  const renderEstadoEnLinea = () => (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+        marginLeft: 4,
+        cursor: 'pointer',
+        userSelect: 'none'
+      }}
+      onClick={cambiarEstadoLineaManual}
+      title={enLinea ? 'Haz clic para ponerte fuera de línea' : 'Haz clic para ponerte en línea'}
+    >
+      <span
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          background: enLinea ? '#28a745' : '#ccc',
+          display: 'inline-block',
+          border: '2px solid #fff',
+          boxShadow: enLinea ? '0 0 4px #28a745' : undefined
+        }}
+      ></span>
+      <span style={{
+        fontWeight: 'bold',
+        color: enLinea ? '#28a745' : '#888',
+        fontSize: 15
+      }}>
+        {enLinea ? 'En línea' : 'Desconectado'}
+      </span>
+    </div>
+  );
 
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>
@@ -256,6 +403,8 @@ function SupervisorPanel({ token, usuario }) {
           position: 'sticky',
           top: 40
         }}>
+          {/* Icono de estado en línea/desconectado arriba de administración */}
+          {renderEstadoEnLinea()}
           <button
             style={{
               width: 120,
@@ -331,6 +480,8 @@ function SupervisorPanel({ token, usuario }) {
           >
             Chat privado
           </button>
+          {/* Panel de usuarios conectados y desconectados por fuera de las pestañas */}
+          {renderUsuariosPanel()}
         </div>
         <div style={{ flex: 1 }}>
           {activeTab === 'usuarios' && (

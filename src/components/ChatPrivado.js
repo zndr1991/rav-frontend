@@ -47,8 +47,8 @@ function ChatPrivado({ token, usuario, destinatario }) {
         setError(`Error al cargar mensajes: ${res.status} - ${text}`);
         return;
       }
-  const data = await res.json();
-  setMensajes(Array.isArray(data) ? data : []);
+      const data = await res.json();
+      setMensajes(data || []);
     } catch (err) {
       setMensajes([]);
       setError('No se pudieron cargar los mensajes. ' + (err?.message || 'Error desconocido.'));
@@ -108,8 +108,7 @@ function ChatPrivado({ token, usuario, destinatario }) {
 
     // Evento de borrado de mensaje privado
     socketRef.current.on('mensaje-borrado-privado', (mensajeId) => {
-  console.log('Evento recibido: mensaje-borrado-privado', mensajeId);
-  setMensajes(prev => prev.filter(m => String(m.id) !== String(mensajeId)));
+      setMensajes(prev => prev.filter(m => String(m.id) !== String(mensajeId)));
     });
 
     return () => {
@@ -224,7 +223,10 @@ function ChatPrivado({ token, usuario, destinatario }) {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      // El mensaje se eliminará por socket en tiempo real (evento emitido solo por el backend)
+      if (res.ok && socketRef.current) {
+        socketRef.current.emit('mensaje-borrado-privado', id);
+      }
+      // El mensaje se eliminará por socket en tiempo real
     } catch {
       setError('No se pudo borrar el mensaje.');
     }
