@@ -11,6 +11,8 @@ function UserPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
+  const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
+  const [usuariosTodos, setUsuariosTodos] = useState([]);
   const socketRef = useRef(null);
 
   // Persistencia de pestaña activa
