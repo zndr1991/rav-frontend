@@ -13,7 +13,6 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
   const [editandoTexto, setEditandoTexto] = useState('');
   const [mensajeOriginal, setMensajeOriginal] = useState({});
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
-  const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const scrollRef = useRef(null);
 
   // Estado en línea persistente por usuario
@@ -51,7 +50,6 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
     if (!socket) return;
 
     socket.on('nuevo-mensaje-privado', (mensaje) => {
-      // Solo agrega si es entre los dos usuarios
       if (
         (mensaje.remitente_id === usuario.id && mensaje.destinatario_id === destinatario.id) ||
         (mensaje.remitente_id === destinatario.id && mensaje.destinatario_id === usuario.id)
@@ -69,10 +67,6 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
       );
     });
 
-    socket.on('usuarios-en-linea', (usuarios) => {
-      setUsuariosEnLinea(usuarios);
-    });
-
     socket.emit('usuario-en-linea', {
       usuario_id: usuario.id,
       nombre: usuario.nombre,
@@ -82,7 +76,6 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
     return () => {
       socket.off('nuevo-mensaje-privado');
       socket.off('mensaje-editado-privado');
-      socket.off('usuarios-en-linea');
     };
   }, [socket, usuario.id, usuario.nombre, destinatario, enLinea]);
 
@@ -257,50 +250,7 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
           }
         `}
       </style>
-      {/* Botón de estado en línea separado */}
-      <div style={{ marginBottom: 16 }}>
-        <button
-          onClick={() => cambiarEstadoLinea(!enLinea)}
-          style={{
-            padding: '6px 18px',
-            background: enLinea ? '#28a745' : '#dc3545',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            fontWeight: 'bold',
-            fontSize: 15,
-            cursor: 'pointer'
-          }}
-        >
-          {enLinea ? 'En Línea' : 'Desconectado'}
-        </button>
-      </div>
-      {/* Sección de usuarios en línea separada */}
-      <div style={{
-        marginBottom: 16,
-        padding: 10,
-        border: '1px solid #007bff',
-        borderRadius: 8,
-        background: '#eef6ff'
-      }}>
-        <div style={{ marginBottom: 8, fontWeight: 'bold', color: '#007bff' }}>
-          Usuarios en línea:
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          {usuariosEnLinea.length === 0 && <span style={{ color: '#888' }}>Nadie en línea</span>}
-          {usuariosEnLinea.map(u => (
-            <span key={u.usuario_id} style={{
-              background: u.usuario_id === usuario.id ? '#007bff' : '#e6f7ff',
-              color: u.usuario_id === usuario.id ? '#fff' : '#007bff',
-              padding: '4px 12px',
-              borderRadius: 6,
-              fontWeight: u.usuario_id === usuario.id ? 'bold' : 'normal'
-            }}>
-              {u.nombre}
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* Barra de usuarios en línea eliminada */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
