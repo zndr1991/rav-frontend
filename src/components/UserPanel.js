@@ -11,7 +11,13 @@ function UserPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
+<<<<<<< HEAD
   const socketRef = useRef(null);
+=======
+  const [usuariosTodos, setUsuariosTodos] = useState([]);
+  const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
+  const socketRef = React.useRef(null);
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
 
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
@@ -36,6 +42,7 @@ function UserPanel({ token, usuario }) {
     }
   };
 
+  // Obtener todos los usuarios
   const fetchUsuarios = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
@@ -44,11 +51,14 @@ function UserPanel({ token, usuario }) {
       const data = await res.json();
       if (res.ok) {
         setUsuarios(data);
+        setUsuariosTodos(data);
       } else {
         setUsuarios([]);
+        setUsuariosTodos([]);
       }
     } catch {
       setUsuarios([]);
+      setUsuariosTodos([]);
     }
   };
 
@@ -80,14 +90,19 @@ function UserPanel({ token, usuario }) {
     }, 200);
   };
 
+  // Mantener el socket abierto y emitir en línea al conectar
   useEffect(() => {
     if (usuario?.id && token) {
+<<<<<<< HEAD
       fetchSinLeerGeneral();
 
       const interval = setInterval(fetchSinLeerGeneral, 10000);
 
       // Conexión Socket.IO
       const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
+=======
+      socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
         transports: ['websocket'],
         autoConnect: true
       });
@@ -100,11 +115,19 @@ function UserPanel({ token, usuario }) {
         enLinea: true
       });
 
-      socket.on('usuarios-en-linea', (usuarios) => {
+      socketRef.current.on('connect', () => {
+        socketRef.current.emit('usuario-en-linea', {
+          usuario_id: usuario.id,
+          nombre: usuario.nombre,
+          enLinea: true
+        });
+      });
+
+      socketRef.current.on('usuarios-en-linea', (usuarios) => {
         setUsuariosEnLinea(usuarios);
       });
 
-      socket.on('nuevo-mensaje', (mensaje) => {
+      socketRef.current.on('nuevo-mensaje', (mensaje) => {
         fetchSinLeerGeneral();
         if (mensaje.usuario_id !== usuario.id) {
           const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
@@ -130,6 +153,7 @@ function UserPanel({ token, usuario }) {
         }
       });
 
+<<<<<<< HEAD
       // Al desmontar, notificar que el usuario está fuera de línea
       return () => {
         clearInterval(interval);
@@ -141,9 +165,27 @@ function UserPanel({ token, usuario }) {
           });
           socket.disconnect();
         }
+=======
+      // Emitir desconectado al salir/cerrar la app
+      const handleUnload = () => {
+        if (socketRef.current) {
+          socketRef.current.emit('usuario-en-linea', {
+            usuario_id: usuario.id,
+            nombre: usuario.nombre,
+            enLinea: false
+          });
+          socketRef.current.disconnect();
+        }
+      };
+      window.addEventListener('beforeunload', handleUnload);
+
+      return () => {
+        handleUnload();
+        window.removeEventListener('beforeunload', handleUnload);
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
       };
     }
-  }, [usuario?.id, token, activeTab]);
+  }, [usuario?.id, token]);
 
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
@@ -160,11 +202,132 @@ function UserPanel({ token, usuario }) {
     } catch {}
   };
 
+  // Cambiar estado en línea manualmente al hacer clic en el icono
+  const cambiarEstadoLineaManual = () => {
+    const nuevoEstado = !enLinea;
+    setEnLinea(nuevoEstado);
+    localStorage.setItem(`enLinea_${usuario.id}`, nuevoEstado ? 'true' : 'false');
+    if (socketRef.current) {
+      socketRef.current.emit('usuario-en-linea', {
+        usuario_id: usuario.id,
+        nombre: usuario.nombre,
+        enLinea: nuevoEstado
+      });
+    }
+  };
+
   // Selección de destinatario para chat privado (muestra todos los usuarios)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
     setActiveTabPersist('chat-privado');
   };
+
+  // Panel de usuarios conectados y desconectados (por fuera de las pestañas)
+  const renderUsuariosPanel = () => {
+    const conectadosIds = usuariosEnLinea.map(u => u.usuario_id);
+    const conectados = usuariosTodos.filter(u => conectadosIds.includes(u.id));
+    const desconectados = usuariosTodos.filter(u => !conectadosIds.includes(u.id));
+
+    return (
+      <div style={{
+        background: '#f8f9fa',
+        border: '1px solid #ddd',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 18,
+        minWidth: 120,
+        maxWidth: 120,
+        width: 120,
+        boxSizing: 'border-box'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', fontSize: 15, color: '#007bff', textAlign: 'center' }}>Usuarios</h4>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {conectados.map(u => (
+            <li key={u.id} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 6,
+              fontSize: 14
+            }}>
+              <span title="En línea" style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: '#28a745',
+                display: 'inline-block'
+              }}></span>
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: 80
+              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
+            </li>
+          ))}
+          {desconectados.map(u => (
+            <li key={u.id} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 6,
+              fontSize: 14
+            }}>
+              <span title="Desconectado" style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: '#ccc',
+                display: 'inline-block'
+              }}></span>
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: 80
+              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  // Icono de estado en línea/desconectado arriba de perfil, clickeable
+  const renderEstadoEnLinea = () => (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+        marginLeft: 4,
+        cursor: 'pointer',
+        userSelect: 'none'
+      }}
+      onClick={cambiarEstadoLineaManual}
+      title={enLinea ? 'Haz clic para ponerte fuera de línea' : 'Haz clic para ponerte en línea'}
+    >
+      <span
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          background: enLinea ? '#28a745' : '#ccc',
+          display: 'inline-block',
+          border: '2px solid #fff',
+          boxShadow: enLinea ? '0 0 4px #28a745' : undefined
+        }}
+      ></span>
+      <span style={{
+        fontWeight: 'bold',
+        color: enLinea ? '#28a745' : '#888',
+        fontSize: 15
+      }}>
+        {enLinea ? 'En línea' : 'Desconectado'}
+      </span>
+    </div>
+  );
 
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>
@@ -185,6 +348,8 @@ function UserPanel({ token, usuario }) {
           position: 'sticky',
           top: 40
         }}>
+          {/* Icono de estado en línea/desconectado arriba de perfil */}
+          {renderEstadoEnLinea()}
           <button
             style={{
               width: 120,
@@ -260,6 +425,7 @@ function UserPanel({ token, usuario }) {
           >
             Chat privado
           </button>
+<<<<<<< HEAD
           <div style={{
             marginTop: 18,
             background: '#eef6ff',
@@ -291,6 +457,10 @@ function UserPanel({ token, usuario }) {
               )}
             </ul>
           </div>
+=======
+          {/* Panel de usuarios conectados y desconectados por fuera de las pestañas */}
+          {renderUsuariosPanel()}
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
         </div>
         <div style={{ flex: 1 }}>
           {activeTab === 'perfil' && (

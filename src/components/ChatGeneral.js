@@ -19,6 +19,7 @@ function ChatGeneral({ token, usuario }) {
   const socketRef = useRef(null);
   const usuariosEnLineaRef = useRef([]);
 
+  // El estado enLinea solo lo controla el usuario
   const estadoInicial = localStorage.getItem(`enLinea_${usuario.id}`) === 'true';
   const [enLinea, setEnLinea] = useState(estadoInicial);
 
@@ -118,17 +119,16 @@ function ChatGeneral({ token, usuario }) {
     });
 
     return () => {
-      if (enLinea) {
-        socketRef.current.emit('usuario-en-linea', { usuario_id: usuario.id, nombre: usuario.nombre, enLinea: false });
-      }
+      // Ya no cambiamos enLinea automáticamente aquí
       socketRef.current.disconnect();
     };
-  }, [token, usuario.id, usuario.nombre]);
+  }, [token, usuario.id, usuario.nombre, enLinea]);
 
   useEffect(() => {
     localStorage.setItem(`enLinea_${usuario.id}`, enLinea ? 'true' : 'false');
   }, [enLinea, usuario.id]);
 
+  // El usuario controla el estado en línea manualmente
   const cambiarEstadoLinea = (nuevoEstado) => {
     setEnLinea(nuevoEstado);
     if (socketRef.current) {
@@ -294,48 +294,7 @@ function ChatGeneral({ token, usuario }) {
           }
         `}
       </style>
-      <div style={{ marginBottom: 16 }}>
-        <button
-          onClick={() => cambiarEstadoLinea(!enLinea)}
-          style={{
-            padding: '6px 18px',
-            background: enLinea ? '#28a745' : '#dc3545',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            fontWeight: 'bold',
-            fontSize: 15,
-            cursor: 'pointer'
-          }}
-        >
-          {enLinea ? 'En Línea' : 'Desconectado'}
-        </button>
-      </div>
-      <div style={{
-        marginBottom: 16,
-        padding: 10,
-        border: '1px solid #007bff',
-        borderRadius: 8,
-        background: '#eef6ff'
-      }}>
-        <div style={{ marginBottom: 8, fontWeight: 'bold', color: '#007bff' }}>
-          Usuarios en línea:
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          {usuariosEnLinea.length === 0 && <span style={{ color: '#888' }}>Nadie en línea</span>}
-          {usuariosEnLinea.map(u => (
-            <span key={u.usuario_id} style={{
-              background: u.usuario_id === usuario.id ? '#007bff' : '#e6f7ff',
-              color: u.usuario_id === usuario.id ? '#fff' : '#007bff',
-              padding: '4px 12px',
-              borderRadius: 6,
-              fontWeight: u.usuario_id === usuario.id ? 'bold' : 'normal'
-            }}>
-              {u.nombre}
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* El botón de estado en línea ha sido eliminado */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
