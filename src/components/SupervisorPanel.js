@@ -283,50 +283,38 @@ function SupervisorPanel({ token, usuario }) {
       }}>
         <h4 style={{ margin: '0 0 10px 0', fontSize: 15, color: '#007bff', textAlign: 'center' }}>Usuarios</h4>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {conectados.map(u => (
-            <li key={u.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 6,
-              fontSize: 14
-            }}>
-              <span title="En línea" style={{
+          {[...conectados, ...desconectados].map(u => (
+            <li
+              key={u.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 6,
+                fontSize: 14,
+                cursor: u.id !== usuario.id ? 'pointer' : 'default',
+                opacity: u.id === usuario.id ? 0.6 : 1
+              }}
+              onClick={() => u.id !== usuario.id && handleSelectDestinatario(u)}
+              title={u.id !== usuario.id ? 'Ir al chat privado' : 'Este eres tú'}
+            >
+              <span title={conectadosIds.includes(u.id) ? "En línea" : "Desconectado"} style={{
                 width: 10,
                 height: 10,
                 borderRadius: '50%',
-                background: '#28a745',
+                background: conectadosIds.includes(u.id) ? '#28a745' : '#ccc',
                 display: 'inline-block'
               }}></span>
               <span style={{
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                maxWidth: 80
-              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
-            </li>
-          ))}
-          {desconectados.map(u => (
-            <li key={u.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 6,
-              fontSize: 14
-            }}>
-              <span title="Desconectado" style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: '#ccc',
-                display: 'inline-block'
-              }}></span>
-              <span style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: 80
-              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
+                maxWidth: 80,
+                textDecoration: u.id !== usuario.id ? 'underline' : 'none',
+                color: u.id !== usuario.id ? '#007bff' : '#333'
+              }}>
+                {u.nombre || u.email || `ID ${u.id}`}
+              </span>
             </li>
           ))}
         </ul>
