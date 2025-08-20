@@ -20,21 +20,7 @@ function SupervisorPanel({ token, usuario }) {
   const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
   const socketRef = React.useRef(null);
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
   // Persistencia de pestaña activa
-=======
->>>>>>> fix-frontend
-  const destinatarioMemo = useMemo(() => {
-    if (!destinatario) return null;
-    return { id: destinatario.id, nombre: destinatario.nombre };
-  }, [destinatario?.id, destinatario?.nombre]);
-
-<<<<<<< HEAD
-=======
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
     localStorage.setItem('supervisorActiveTab', tab);
@@ -45,24 +31,6 @@ function SupervisorPanel({ token, usuario }) {
     if (savedTab) setActiveTab(savedTab);
   }, []);
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
->>>>>>> fix-frontend
-  useEffect(() => {
-    const savedDestId = localStorage.getItem('supervisorDestinatarioId');
-    if (savedDestId && usuarios.length > 0) {
-      const user = usuarios.find(u => String(u.id) === String(savedDestId));
-      if (user) setDestinatario(user);
-    }
-  }, [usuarios]);
-
-  // Obtener todos los usuarios
-<<<<<<< HEAD
-=======
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
   const fetchUsuarios = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {

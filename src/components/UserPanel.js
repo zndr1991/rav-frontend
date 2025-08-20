@@ -11,19 +11,7 @@ function UserPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
-<<<<<<< HEAD
-  const [usuariosTodos, setUsuariosTodos] = useState([]);
-  const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
-  const socketRef = React.useRef(null);
-=======
-<<<<<<< HEAD
   const socketRef = useRef(null);
-=======
-  const [usuariosTodos, setUsuariosTodos] = useState([]);
-  const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
-  const socketRef = React.useRef(null);
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
 
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
@@ -99,27 +87,17 @@ function UserPanel({ token, usuario }) {
   // Mantener el socket abierto y emitir en línea al conectar
   useEffect(() => {
     if (usuario?.id && token) {
-<<<<<<< HEAD
-      socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
-=======
-<<<<<<< HEAD
       fetchSinLeerGeneral();
 
       const interval = setInterval(fetchSinLeerGeneral, 10000);
 
       // Conexión Socket.IO
       const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
-=======
-      socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
         transports: ['websocket'],
         autoConnect: true
       });
       socketRef.current = socket;
 
-<<<<<<< HEAD
-=======
       // Notificar al backend que el usuario está en línea
       socket.emit('usuario-en-linea', {
         usuario_id: usuario.id,
@@ -127,7 +105,6 @@ function UserPanel({ token, usuario }) {
         enLinea: true
       });
 
->>>>>>> fix-frontend
       socketRef.current.on('connect', () => {
         socketRef.current.emit('usuario-en-linea', {
           usuario_id: usuario.id,
@@ -166,25 +143,6 @@ function UserPanel({ token, usuario }) {
         }
       });
 
-<<<<<<< HEAD
-      // Emitir desconectado al salir/cerrar la app
-      const handleUnload = () => {
-        if (socketRef.current) {
-          socketRef.current.emit('usuario-en-linea', {
-            usuario_id: usuario.id,
-            nombre: usuario.nombre,
-            enLinea: false
-          });
-          socketRef.current.disconnect();
-        }
-      };
-      window.addEventListener('beforeunload', handleUnload);
-
-      return () => {
-        handleUnload();
-        window.removeEventListener('beforeunload', handleUnload);
-=======
-<<<<<<< HEAD
       // Al desmontar, notificar que el usuario está fuera de línea
       return () => {
         clearInterval(interval);
@@ -196,25 +154,6 @@ function UserPanel({ token, usuario }) {
           });
           socket.disconnect();
         }
-=======
-      // Emitir desconectado al salir/cerrar la app
-      const handleUnload = () => {
-        if (socketRef.current) {
-          socketRef.current.emit('usuario-en-linea', {
-            usuario_id: usuario.id,
-            nombre: usuario.nombre,
-            enLinea: false
-          });
-          socketRef.current.disconnect();
-        }
-      };
-      window.addEventListener('beforeunload', handleUnload);
-
-      return () => {
-        handleUnload();
-        window.removeEventListener('beforeunload', handleUnload);
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
       };
     }
   }, [usuario?.id, token]);
@@ -253,113 +192,6 @@ function UserPanel({ token, usuario }) {
     setDestinatario(user);
     setActiveTabPersist('chat-privado');
   };
-
-  // Panel de usuarios conectados y desconectados (por fuera de las pestañas)
-  const renderUsuariosPanel = () => {
-    const conectadosIds = usuariosEnLinea.map(u => u.usuario_id);
-    const conectados = usuariosTodos.filter(u => conectadosIds.includes(u.id));
-    const desconectados = usuariosTodos.filter(u => !conectadosIds.includes(u.id));
-
-    return (
-      <div style={{
-        background: '#f8f9fa',
-        border: '1px solid #ddd',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 18,
-        minWidth: 120,
-        maxWidth: 120,
-        width: 120,
-        boxSizing: 'border-box'
-      }}>
-        <h4 style={{ margin: '0 0 10px 0', fontSize: 15, color: '#007bff', textAlign: 'center' }}>Usuarios</h4>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {conectados.map(u => (
-            <li key={u.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 6,
-              fontSize: 14
-            }}>
-              <span title="En línea" style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: '#28a745',
-                display: 'inline-block'
-              }}></span>
-              <span style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: 80
-              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
-            </li>
-          ))}
-          {desconectados.map(u => (
-            <li key={u.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 6,
-              fontSize: 14
-            }}>
-              <span title="Desconectado" style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: '#ccc',
-                display: 'inline-block'
-              }}></span>
-              <span style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: 80
-              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  };
-
-  // Icono de estado en línea/desconectado arriba de perfil, clickeable
-  const renderEstadoEnLinea = () => (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 8,
-        marginLeft: 4,
-        cursor: 'pointer',
-        userSelect: 'none'
-      }}
-      onClick={cambiarEstadoLineaManual}
-      title={enLinea ? 'Haz clic para ponerte fuera de línea' : 'Haz clic para ponerte en línea'}
-    >
-      <span
-        style={{
-          width: 14,
-          height: 14,
-          borderRadius: '50%',
-          background: enLinea ? '#28a745' : '#ccc',
-          display: 'inline-block',
-          border: '2px solid #fff',
-          boxShadow: enLinea ? '0 0 4px #28a745' : undefined
-        }}
-      ></span>
-      <span style={{
-        fontWeight: 'bold',
-        color: enLinea ? '#28a745' : '#888',
-        fontSize: 15
-      }}>
-        {enLinea ? 'En línea' : 'Desconectado'}
-      </span>
-    </div>
-  );
 
   // Panel de usuarios conectados y desconectados (por fuera de las pestañas)
   const renderUsuariosPanel = () => {
@@ -564,11 +396,6 @@ function UserPanel({ token, usuario }) {
           >
             Chat privado
           </button>
-<<<<<<< HEAD
-          {/* Panel de usuarios conectados y desconectados por fuera de las pestañas */}
-          {renderUsuariosPanel()}
-=======
-<<<<<<< HEAD
           <div style={{
             marginTop: 18,
             background: '#eef6ff',
@@ -600,11 +427,6 @@ function UserPanel({ token, usuario }) {
               )}
             </ul>
           </div>
-=======
-          {/* Panel de usuarios conectados y desconectados por fuera de las pestañas */}
-          {renderUsuariosPanel()}
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
         </div>
         <div style={{ flex: 1 }}>
           {activeTab === 'perfil' && (

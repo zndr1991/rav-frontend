@@ -32,18 +32,6 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
         `${process.env.REACT_APP_API_URL}/chat/private?usuario_id=${usuario.id}&destinatario_id=${destinatario.id}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
-<<<<<<< HEAD
-=======
-      if (!res.ok) {
-        const text = await res.text();
-        setMensajes([]);
-        setError(`Error al cargar mensajes: ${res.status} - ${text}`);
-        return;
-      }
-<<<<<<< HEAD
-=======
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
       const data = await res.json();
       setMensajes(data || []);
     } catch (err) {
@@ -85,27 +73,10 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
       setUsuariosEnLinea(usuarios);
     });
 
-<<<<<<< HEAD
     socket.emit('usuario-en-linea', {
       usuario_id: usuario.id,
       nombre: usuario.nombre,
       enLinea: enLinea
-=======
-    socketRef.current.on('connect', () => {
-      socketRef.current.emit('usuario-en-linea', {
-        usuario_id: usuario.id,
-        nombre: usuario.nombre,
-        enLinea
-      });
-    });
-
-    // Evento de borrado de mensaje privado
-    socketRef.current.on('mensaje-borrado-privado', (mensajeId) => {
-      setMensajes(prev => prev.filter(m => String(m.id) !== String(mensajeId)));
-<<<<<<< HEAD
-=======
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
     });
 
     return () => {
@@ -215,22 +186,9 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
       if (res.ok) {
         setMensajes(prev => prev.filter(m => m.id !== id));
       }
-=======
->>>>>>> fix-frontend
-      if (res.ok && socketRef.current) {
-        socketRef.current.emit('mensaje-borrado-privado', id);
-      }
-      // El mensaje se eliminará por socket en tiempo real
-<<<<<<< HEAD
-=======
->>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
->>>>>>> fix-frontend
     } catch {
       setError('No se pudo borrar el mensaje.');
     }
