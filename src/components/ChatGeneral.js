@@ -32,14 +32,8 @@ function ChatGeneral({ token, usuario }) {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) {
-        setMensajes([]);
-        setError('Error al cargar mensajes.');
-        setCargando(false);
-        return;
-      }
       const data = await res.json();
-      setMensajes(Array.isArray(data.mensajes) ? data.mensajes : []);
+      setMensajes(data || []);
     } catch (err) {
       setMensajes([]);
       setError('No se pudieron cargar los mensajes.');
@@ -49,7 +43,11 @@ function ChatGeneral({ token, usuario }) {
   };
 
   useEffect(() => {
-  socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
+    fetchMensajes();
+  }, [token]);
+
+  useEffect(() => {
+    socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
       transports: ['websocket'],
       autoConnect: true,
       auth: { token }

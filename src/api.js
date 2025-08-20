@@ -242,6 +242,17 @@ export async function getUsers(token) {
   }
 }
 
+// Obtener usuarios en línea
+export async function getOnlineUsers() {
+  try {
+    const res = await fetch(`${API_URL}/users/online`);
+    return await res.json();
+  } catch (error) {
+    console.error("Error al obtener usuarios en línea:", error);
+    return [];
+  }
+}
+
 export async function deleteMessage(id, token) {
   const res = await fetch(`${API_URL}/chat/general/${id}`, {
     method: "DELETE",

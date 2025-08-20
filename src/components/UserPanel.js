@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ChatGeneral from './ChatGeneral';
 import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
@@ -11,6 +11,7 @@ function UserPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
+  const socketRef = useRef(null);
 
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
@@ -41,7 +42,6 @@ function UserPanel({ token, usuario }) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      console.log('Usuarios:', data); // <-- Para depuración
       if (res.ok) {
         setUsuarios(data);
       } else {
@@ -86,9 +86,18 @@ function UserPanel({ token, usuario }) {
 
       const interval = setInterval(fetchSinLeerGeneral, 10000);
 
+      // Conexión Socket.IO
       const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
         transports: ['websocket'],
         autoConnect: true
+      });
+      socketRef.current = socket;
+
+      // Notificar al backend que el usuario está en línea
+      socket.emit('usuario-en-linea', {
+        usuario_id: usuario.id,
+        nombre: usuario.nombre,
+        enLinea: true
       });
 
       socket.on('usuarios-en-linea', (usuarios) => {
@@ -121,9 +130,17 @@ function UserPanel({ token, usuario }) {
         }
       });
 
+      // Al desmontar, notificar que el usuario está fuera de línea
       return () => {
         clearInterval(interval);
-        socket.disconnect();
+        if (socket) {
+          socket.emit('usuario-en-linea', {
+            usuario_id: usuario.id,
+            nombre: usuario.nombre,
+            enLinea: false
+          });
+          socket.disconnect();
+        }
       };
     }
   }, [usuario?.id, token, activeTab]);
@@ -146,23 +163,8 @@ function UserPanel({ token, usuario }) {
   // Selección de destinatario para chat privado (muestra todos los usuarios)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
-    localStorage.setItem('userpanelDestinatarioId', user.id);
     setActiveTabPersist('chat-privado');
   };
-  // Restaurar destinatario guardado solo cuando usuarios estén listos
-  useEffect(() => {
-    const savedDestId = localStorage.getItem('userpanelDestinatarioId');
-    if (savedDestId && usuarios && usuarios.length > 0) {
-      const user = usuarios.find(u => String(u.id) === String(savedDestId));
-      if (user) setDestinatario(user);
-    }
-  }, [usuarios]);
-
-  // Memoizar destinatario para evitar recreación constante
-  const destinatarioMemo = useMemo(() => {
-    if (!destinatario) return null;
-    return { id: destinatario.id, nombre: destinatario.nombre };
-  }, [destinatario?.id, destinatario?.nombre]);
 
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>
@@ -258,6 +260,37 @@ function UserPanel({ token, usuario }) {
           >
             Chat privado
           </button>
+          <div style={{
+            marginTop: 18,
+            background: '#eef6ff',
+            border: '1px solid #007bff',
+            borderRadius: 8,
+            padding: '8px 10px',
+            width: '100%',
+            minHeight: 48
+          }}>
+            <b style={{ color: '#007bff', fontSize: 15 }}>Usuarios en línea:</b>
+            <ul style={{ margin: '8px 0 0 0', padding: 0, listStyle: 'none', color: '#444', fontSize: 14 }}>
+              {usuariosEnLinea.length === 0 ? (
+                <li style={{ color: '#888' }}>Nadie en línea</li>
+              ) : (
+                usuariosEnLinea.map(u => (
+                  <li key={u.usuario_id} style={{ marginBottom: 2 }}>
+                    <span style={{
+                      display: 'inline-block',
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: '#28a745',
+                      marginRight: 6,
+                      verticalAlign: 'middle'
+                    }}></span>
+                    {u.nombre}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
         </div>
         <div style={{ flex: 1 }}>
           {activeTab === 'perfil' && (
@@ -316,7 +349,7 @@ function UserPanel({ token, usuario }) {
                   token={token}
                   usuario={usuario}
                   socket={null}
-                  destinatario={destinatarioMemo}
+                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
                 />
               ) : (
                 <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>
