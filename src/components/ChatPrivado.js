@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-function ChatPrivado({ token, usuario, destinatario }) {
+function ChatPrivado({ token, usuario, socket, destinatario }) {
   const [mensajes, setMensajes] = useState([]);
   const [mensajeTexto, setMensajeTexto] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -14,11 +13,8 @@ function ChatPrivado({ token, usuario, destinatario }) {
   const [editandoTexto, setEditandoTexto] = useState('');
   const [mensajeOriginal, setMensajeOriginal] = useState({});
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
-
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const scrollRef = useRef(null);
-  const socketRef = useRef(null);
-  const usuariosEnLineaRef = useRef([]);
 
   // Estado en línea persistente por usuario
   const estadoInicial = localStorage.getItem(`enLinea_${usuario.id}`) === 'true';
@@ -27,13 +23,8 @@ function ChatPrivado({ token, usuario, destinatario }) {
   const textareaRef = useRef(null);
   const editTextareaRef = useRef(null);
 
-  // Cargar mensajes privados entre usuario y destinatario con mejor manejo de errores
+  // Cargar mensajes privados entre usuario y destinatario
   const fetchMensajes = async () => {
-    console.log('fetchMensajes llamado:', {
-      usuario_id: usuario.id,
-      destinatario_id: destinatario?.id,
-      destinatario
-    });
     setCargando(true);
     setError('');
     try {
@@ -41,40 +32,37 @@ function ChatPrivado({ token, usuario, destinatario }) {
         `${process.env.REACT_APP_API_URL}/chat/private?usuario_id=${usuario.id}&destinatario_id=${destinatario.id}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
+<<<<<<< HEAD
+=======
       if (!res.ok) {
         const text = await res.text();
         setMensajes([]);
         setError(`Error al cargar mensajes: ${res.status} - ${text}`);
         return;
       }
+<<<<<<< HEAD
+=======
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
+>>>>>>> fix-frontend
       const data = await res.json();
       setMensajes(data || []);
     } catch (err) {
       setMensajes([]);
-      setError('No se pudieron cargar los mensajes. ' + (err?.message || 'Error desconocido.'));
+      setError('No se pudieron cargar los mensajes.');
     } finally {
       setCargando(false);
     }
   };
 
-  // Solo cargar mensajes al cambiar destinatario
   useEffect(() => {
-    console.log('useEffect de destinatario/token ejecutado', { destinatario, token });
-    if (destinatario?.id) {
-      fetchMensajes();
-    }
-    // No hay polling ni intervalos
+    if (destinatario?.id) fetchMensajes();
   }, [token, destinatario]);
 
-  // Socket.IO para tiempo real (adaptado de ChatGeneral)
+  // Socket.IO para tiempo real
   useEffect(() => {
-    socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
-      transports: ['websocket'],
-      autoConnect: true,
-      auth: { token }
-    });
+    if (!socket) return;
 
-    socketRef.current.on('nuevo-mensaje-privado', (mensaje) => {
+    socket.on('nuevo-mensaje-privado', (mensaje) => {
       // Solo agrega si es entre los dos usuarios
       if (
         (mensaje.remitente_id === usuario.id && mensaje.destinatario_id === destinatario.id) ||
@@ -85,7 +73,7 @@ function ChatPrivado({ token, usuario, destinatario }) {
       }
     });
 
-    socketRef.current.on('mensaje-editado-privado', (msgEditado) => {
+    socket.on('mensaje-editado-privado', (msgEditado) => {
       setMensajes(prev =>
         prev.map(m =>
           m.id === msgEditado.id ? { ...m, ...msgEditado } : m
@@ -93,11 +81,16 @@ function ChatPrivado({ token, usuario, destinatario }) {
       );
     });
 
-    socketRef.current.on('usuarios-en-linea', (usuarios) => {
+    socket.on('usuarios-en-linea', (usuarios) => {
       setUsuariosEnLinea(usuarios);
-      usuariosEnLineaRef.current = usuarios;
     });
 
+<<<<<<< HEAD
+    socket.emit('usuario-en-linea', {
+      usuario_id: usuario.id,
+      nombre: usuario.nombre,
+      enLinea: enLinea
+=======
     socketRef.current.on('connect', () => {
       socketRef.current.emit('usuario-en-linea', {
         usuario_id: usuario.id,
@@ -109,15 +102,18 @@ function ChatPrivado({ token, usuario, destinatario }) {
     // Evento de borrado de mensaje privado
     socketRef.current.on('mensaje-borrado-privado', (mensajeId) => {
       setMensajes(prev => prev.filter(m => String(m.id) !== String(mensajeId)));
+<<<<<<< HEAD
+=======
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
+>>>>>>> fix-frontend
     });
 
     return () => {
-      if (enLinea) {
-        socketRef.current.emit('usuario-en-linea', { usuario_id: usuario.id, nombre: usuario.nombre, enLinea: false });
-      }
-      socketRef.current.disconnect();
+      socket.off('nuevo-mensaje-privado');
+      socket.off('mensaje-editado-privado');
+      socket.off('usuarios-en-linea');
     };
-  }, [token, usuario.id, usuario.nombre, destinatario, enLinea]);
+  }, [socket, usuario.id, usuario.nombre, destinatario, enLinea]);
 
   useEffect(() => {
     localStorage.setItem(`enLinea_${usuario.id}`, enLinea ? 'true' : 'false');
@@ -125,8 +121,8 @@ function ChatPrivado({ token, usuario, destinatario }) {
 
   const cambiarEstadoLinea = (nuevoEstado) => {
     setEnLinea(nuevoEstado);
-    if (socketRef.current) {
-      socketRef.current.emit('usuario-en-linea', { usuario_id: usuario.id, nombre: usuario.nombre, enLinea: nuevoEstado });
+    if (socket) {
+      socket.emit('usuario-en-linea', { usuario_id: usuario.id, nombre: usuario.nombre, enLinea: nuevoEstado });
     }
     toast[nuevoEstado ? 'success' : 'info'](
       nuevoEstado ? '¡Estás en línea!' : 'Ahora estás fuera de línea',
@@ -207,26 +203,34 @@ function ChatPrivado({ token, usuario, destinatario }) {
       }
       setMensajeTexto('');
       setAutoScroll(true);
-      // El mensaje llegará por socket en tiempo real
     } catch {
       setError('No se pudo enviar el mensaje.');
     }
   };
 
   const borrarMensaje = async (id) => {
-    // Log para depuración
-    const mensaje = mensajes.find(m => m.id === id);
-    console.log('Intentando borrar mensaje:', { id, mensaje });
     if (!window.confirm('¿Seguro que quieres borrar este mensaje?')) return;
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+      if (res.ok) {
+        setMensajes(prev => prev.filter(m => m.id !== id));
+      }
+=======
+>>>>>>> fix-frontend
       if (res.ok && socketRef.current) {
         socketRef.current.emit('mensaje-borrado-privado', id);
       }
       // El mensaje se eliminará por socket en tiempo real
+<<<<<<< HEAD
+=======
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
+>>>>>>> fix-frontend
     } catch {
       setError('No se pudo borrar el mensaje.');
     }
@@ -295,8 +299,50 @@ function ChatPrivado({ token, usuario, destinatario }) {
           }
         `}
       </style>
-
-
+      {/* Botón de estado en línea separado */}
+      <div style={{ marginBottom: 16 }}>
+        <button
+          onClick={() => cambiarEstadoLinea(!enLinea)}
+          style={{
+            padding: '6px 18px',
+            background: enLinea ? '#28a745' : '#dc3545',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            fontWeight: 'bold',
+            fontSize: 15,
+            cursor: 'pointer'
+          }}
+        >
+          {enLinea ? 'En Línea' : 'Desconectado'}
+        </button>
+      </div>
+      {/* Sección de usuarios en línea separada */}
+      <div style={{
+        marginBottom: 16,
+        padding: 10,
+        border: '1px solid #007bff',
+        borderRadius: 8,
+        background: '#eef6ff'
+      }}>
+        <div style={{ marginBottom: 8, fontWeight: 'bold', color: '#007bff' }}>
+          Usuarios en línea:
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          {usuariosEnLinea.length === 0 && <span style={{ color: '#888' }}>Nadie en línea</span>}
+          {usuariosEnLinea.map(u => (
+            <span key={u.usuario_id} style={{
+              background: u.usuario_id === usuario.id ? '#007bff' : '#e6f7ff',
+              color: u.usuario_id === usuario.id ? '#fff' : '#007bff',
+              padding: '4px 12px',
+              borderRadius: 6,
+              fontWeight: u.usuario_id === usuario.id ? 'bold' : 'normal'
+            }}>
+              {u.nombre}
+            </span>
+          ))}
+        </div>
+      </div>
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -384,7 +430,7 @@ function ChatPrivado({ token, usuario, destinatario }) {
               {msg.fecha ? new Date(msg.fecha).toLocaleString() : ''}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              {msg.remitente_id === usuario.id && (
+              {puedeBorrar(msg) && (
                 <button
                   onClick={() => borrarMensaje(msg.id)}
                   style={{

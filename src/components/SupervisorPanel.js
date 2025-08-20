@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import ChatGeneral from './ChatGeneral';
 import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
@@ -20,11 +20,21 @@ function SupervisorPanel({ token, usuario }) {
   const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
   const socketRef = React.useRef(null);
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+  // Persistencia de pestaña activa
+=======
+>>>>>>> fix-frontend
   const destinatarioMemo = useMemo(() => {
     if (!destinatario) return null;
     return { id: destinatario.id, nombre: destinatario.nombre };
   }, [destinatario?.id, destinatario?.nombre]);
 
+<<<<<<< HEAD
+=======
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
+>>>>>>> fix-frontend
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
     localStorage.setItem('supervisorActiveTab', tab);
@@ -35,6 +45,11 @@ function SupervisorPanel({ token, usuario }) {
     if (savedTab) setActiveTab(savedTab);
   }, []);
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> fix-frontend
   useEffect(() => {
     const savedDestId = localStorage.getItem('supervisorDestinatarioId');
     if (savedDestId && usuarios.length > 0) {
@@ -44,6 +59,10 @@ function SupervisorPanel({ token, usuario }) {
   }, [usuarios]);
 
   // Obtener todos los usuarios
+<<<<<<< HEAD
+=======
+>>>>>>> b65a5e8 (Actualización de frontend: panel de usuarios en línea en tiempo real)
+>>>>>>> fix-frontend
   const fetchUsuarios = async () => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
@@ -259,7 +278,6 @@ function SupervisorPanel({ token, usuario }) {
 
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
-    localStorage.setItem('supervisorDestinatarioId', user.id);
     setActiveTabPersist('chat-privado');
   };
 
@@ -605,7 +623,7 @@ function SupervisorPanel({ token, usuario }) {
                   token={token}
                   usuario={usuario}
                   socket={null}
-                  destinatario={destinatarioMemo}
+                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
                 />
               ) : (
                 <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>
