@@ -63,7 +63,7 @@ function UserPanel({ token, usuario }) {
   }, [token]);
 
   useEffect(() => {
-    if (activeTab === 'chat-privado') {
+    if (activeTab === 'perfil' || activeTab === 'chat-general') {
       fetchUsuarios();
     }
   }, [activeTab, token]);
@@ -88,7 +88,7 @@ function UserPanel({ token, usuario }) {
 
   // Mantener el socket abierto y emitir en línea al conectar
   useEffect(() => {
-    if (usuario?.id && token) {
+    if (!socketRef.current && usuario?.id && token) {
       fetchSinLeerGeneral();
 
       const interval = setInterval(fetchSinLeerGeneral, 10000);
@@ -107,19 +107,19 @@ function UserPanel({ token, usuario }) {
         enLinea: true
       });
 
-      socketRef.current.on('connect', () => {
-        socketRef.current.emit('usuario-en-linea', {
+      socket.on('connect', () => {
+        socket.emit('usuario-en-linea', {
           usuario_id: usuario.id,
           nombre: usuario.nombre,
           enLinea: true
         });
       });
 
-      socketRef.current.on('usuarios-en-linea', (usuarios) => {
+      socket.on('usuarios-en-linea', (usuarios) => {
         setUsuariosEnLinea(usuarios);
       });
 
-      socketRef.current.on('nuevo-mensaje', (mensaje) => {
+      socket.on('nuevo-mensaje', (mensaje) => {
         fetchSinLeerGeneral();
         if (mensaje.usuario_id !== usuario.id) {
           const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
@@ -148,13 +148,14 @@ function UserPanel({ token, usuario }) {
       // Al desmontar, notificar que el usuario está fuera de línea
       return () => {
         clearInterval(interval);
-        if (socket) {
-          socket.emit('usuario-en-linea', {
+        if (socketRef.current) {
+          socketRef.current.emit('usuario-en-linea', {
             usuario_id: usuario.id,
             nombre: usuario.nombre,
             enLinea: false
           });
-          socket.disconnect();
+          socketRef.current.disconnect();
+          socketRef.current = null;
         }
       };
     }
@@ -189,10 +190,10 @@ function UserPanel({ token, usuario }) {
     }
   };
 
-  // Selección de destinatario para chat privado (muestra todos los usuarios)
+  // Selección de destinatario para chat privado (solo desde el panel lateral)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
-    setActiveTabPersist('chat-privado');
+    setActiveTab('chat-privado');
   };
 
   // Panel de usuarios conectados y desconectados (por fuera de las pestañas)
@@ -215,50 +216,38 @@ function UserPanel({ token, usuario }) {
       }}>
         <h4 style={{ margin: '0 0 10px 0', fontSize: 15, color: '#007bff', textAlign: 'center' }}>Usuarios</h4>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {conectados.map(u => (
-            <li key={u.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 6,
-              fontSize: 14
-            }}>
-              <span title="En línea" style={{
+          {[...conectados, ...desconectados].map(u => (
+            <li
+              key={u.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 6,
+                fontSize: 14,
+                cursor: u.id !== usuario.id ? 'pointer' : 'default',
+                opacity: u.id === usuario.id ? 0.6 : 1
+              }}
+              onClick={() => u.id !== usuario.id && handleSelectDestinatario(u)}
+              title={u.id !== usuario.id ? 'Ir al chat privado' : 'Este eres tú'}
+            >
+              <span title={conectadosIds.includes(u.id) ? "En línea" : "Desconectado"} style={{
                 width: 10,
                 height: 10,
                 borderRadius: '50%',
-                background: '#28a745',
+                background: conectadosIds.includes(u.id) ? '#28a745' : '#ccc',
                 display: 'inline-block'
               }}></span>
               <span style={{
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                maxWidth: 80
-              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
-            </li>
-          ))}
-          {desconectados.map(u => (
-            <li key={u.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 6,
-              fontSize: 14
-            }}>
-              <span title="Desconectado" style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: '#ccc',
-                display: 'inline-block'
-              }}></span>
-              <span style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: 80
-              }}>{u.nombre || u.email || `ID ${u.id}`}</span>
+                maxWidth: 80,
+                textDecoration: u.id !== usuario.id ? 'underline' : 'none',
+                color: u.id !== usuario.id ? '#007bff' : '#333'
+              }}>
+                {u.nombre || u.email || `ID ${u.id}`}
+              </span>
             </li>
           ))}
         </ul>
@@ -321,7 +310,6 @@ function UserPanel({ token, usuario }) {
           position: 'sticky',
           top: 40
         }}>
-          {/* Icono de estado en línea/desconectado arriba de perfil */}
           {renderEstadoEnLinea()}
           <button
             style={{
@@ -380,55 +368,7 @@ function UserPanel({ token, usuario }) {
               </span>
             )}
           </div>
-          <button
-            style={{
-              width: 120,
-              padding: '8px 0',
-              background: activeTab === 'chat-privado' ? '#007bff' : '#eee',
-              color: activeTab === 'chat-privado' ? '#fff' : '#333',
-              border: activeTab === 'chat-privado' ? '2px solid #222' : 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: 16,
-              boxShadow: activeTab === 'chat-privado' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
-              textAlign: 'center'
-            }}
-            onClick={() => setActiveTabPersist('chat-privado')}
-          >
-            Chat privado
-          </button>
-          <div style={{
-            marginTop: 18,
-            background: '#eef6ff',
-            border: '1px solid #007bff',
-            borderRadius: 8,
-            padding: '8px 10px',
-            width: '100%',
-            minHeight: 48
-          }}>
-            <b style={{ color: '#007bff', fontSize: 15 }}>Usuarios en línea:</b>
-            <ul style={{ margin: '8px 0 0 0', padding: 0, listStyle: 'none', color: '#444', fontSize: 14 }}>
-              {usuariosEnLinea.length === 0 ? (
-                <li style={{ color: '#888' }}>Nadie en línea</li>
-              ) : (
-                usuariosEnLinea.map(u => (
-                  <li key={u.usuario_id} style={{ marginBottom: 2 }}>
-                    <span style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#28a745',
-                      marginRight: 6,
-                      verticalAlign: 'middle'
-                    }}></span>
-                    {u.nombre}
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
+          {renderUsuariosPanel()}
         </div>
         <div style={{ flex: 1 }}>
           {activeTab === 'perfil' && (
@@ -442,57 +382,14 @@ function UserPanel({ token, usuario }) {
           {activeTab === 'chat-general' && (
             <ChatGeneral token={token} usuario={usuario} />
           )}
-          {activeTab === 'chat-privado' && (
-            <div>
-              <h3>Selecciona un usuario para chatear en privado:</h3>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-                {usuarios
-                  .filter(u => u.id !== usuario.id)
-                  .map(u => {
-                    const enLinea = usuariosEnLinea.some(ul => ul.usuario_id === u.id);
-                    return (
-                      <button
-                        key={u.id}
-                        style={{
-                          padding: '6px 14px',
-                          background: destinatario?.id === u.id ? '#007bff' : '#e6f7ff',
-                          color: destinatario?.id === u.id ? '#fff' : '#007bff',
-                          border: '1px solid #007bff',
-                          borderRadius: 6,
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8
-                        }}
-                        onClick={() => handleSelectDestinatario(u)}
-                      >
-                        {u.nombre}
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            background: enLinea ? '#28a745' : '#ccc',
-                            display: 'inline-block'
-                          }}
-                          title={enLinea ? 'En línea' : 'Desconectado'}
-                        ></span>
-                      </button>
-                    );
-                  })}
-              </div>
-              {destinatario ? (
-                <ChatPrivado
-                  token={token}
-                  usuario={usuario}
-                  socket={null}
-                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
-                />
-              ) : (
-                <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>
-              )}
-            </div>
+          {activeTab === 'chat-privado' && destinatario && (
+            <ChatPrivado
+              token={token}
+              usuario={usuario}
+              socket={socketRef.current}
+              destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
+              onVolver={() => setActiveTab('perfil')}
+            />
           )}
         </div>
       </div>

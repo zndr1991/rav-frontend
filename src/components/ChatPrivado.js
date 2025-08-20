@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-function ChatPrivado({ token, usuario, socket, destinatario }) {
+function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
   const [mensajes, setMensajes] = useState([]);
   const [mensajeTexto, setMensajeTexto] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -41,15 +41,16 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
     }
   };
 
+  // Solo depende de token y destinatario.id para evitar bucle infinito
   useEffect(() => {
     if (destinatario?.id) fetchMensajes();
-  }, [token, destinatario]);
+  }, [token, destinatario?.id]);
 
   // Socket.IO para tiempo real
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('nuevo-mensaje-privado', (mensaje) => {
+    const handleNuevoMensajePrivado = (mensaje) => {
       if (
         (mensaje.remitente_id === usuario.id && mensaje.destinatario_id === destinatario.id) ||
         (mensaje.remitente_id === destinatario.id && mensaje.destinatario_id === usuario.id)
@@ -57,16 +58,20 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
         setMensajes(prev => [...prev, mensaje]);
         setAutoScroll(true);
       }
-    });
+    };
 
-    socket.on('mensaje-editado-privado', (msgEditado) => {
+    const handleMensajeEditadoPrivado = (msgEditado) => {
       setMensajes(prev =>
         prev.map(m =>
           m.id === msgEditado.id ? { ...m, ...msgEditado } : m
         )
       );
-    });
+    };
 
+    socket.on('nuevo-mensaje-privado', handleNuevoMensajePrivado);
+    socket.on('mensaje-editado-privado', handleMensajeEditadoPrivado);
+
+    // Solo emitir usuario-en-linea al conectar o cambiar estado manualmente
     socket.emit('usuario-en-linea', {
       usuario_id: usuario.id,
       nombre: usuario.nombre,
@@ -74,10 +79,10 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
     });
 
     return () => {
-      socket.off('nuevo-mensaje-privado');
-      socket.off('mensaje-editado-privado');
+      socket.off('nuevo-mensaje-privado', handleNuevoMensajePrivado);
+      socket.off('mensaje-editado-privado', handleMensajeEditadoPrivado);
     };
-  }, [socket, usuario.id, usuario.nombre, destinatario, enLinea]);
+  }, [socket, usuario.id, destinatario?.id, enLinea]);
 
   useEffect(() => {
     localStorage.setItem(`enLinea_${usuario.id}`, enLinea ? 'true' : 'false');
@@ -250,7 +255,22 @@ function ChatPrivado({ token, usuario, socket, destinatario }) {
           }
         `}
       </style>
-      {/* Barra de usuarios en línea eliminada */}
+      <button
+        onClick={onVolver}
+        style={{
+          marginBottom: 12,
+          padding: '8px 18px',
+          background: '#eee',
+          color: '#333',
+          border: '1px solid #bbb',
+          borderRadius: 6,
+          fontWeight: 'bold',
+          fontSize: 16,
+          cursor: 'pointer'
+        }}
+      >
+        Volver
+      </button>
       <div
         ref={scrollRef}
         onScroll={handleScroll}

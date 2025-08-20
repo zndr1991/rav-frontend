@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ChatGeneral from './ChatGeneral';
 import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
@@ -18,7 +18,7 @@ function SupervisorPanel({ token, usuario }) {
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const [usuariosTodos, setUsuariosTodos] = useState([]);
   const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
-  const socketRef = React.useRef(null);
+  const socketRef = useRef(null);
 
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
@@ -89,7 +89,7 @@ function SupervisorPanel({ token, usuario }) {
 
   // Mantener el socket abierto y emitir en línea al conectar
   useEffect(() => {
-    if (usuario?.id && token) {
+    if (!socketRef.current && usuario?.id && token) {
       socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
         transports: ['websocket'],
         autoConnect: true
@@ -132,26 +132,21 @@ function SupervisorPanel({ token, usuario }) {
           }
         }
       });
-
-      // Emitir desconectado al salir/cerrar la app
-      const handleUnload = () => {
-        if (socketRef.current) {
-          socketRef.current.emit('usuario-en-linea', {
-            usuario_id: usuario.id,
-            nombre: usuario.nombre,
-            enLinea: false
-          });
-          socketRef.current.disconnect();
-        }
-      };
-      window.addEventListener('beforeunload', handleUnload);
-
-      return () => {
-        handleUnload();
-        window.removeEventListener('beforeunload', handleUnload);
-      };
     }
-  }, [usuario?.id, token]);
+
+    // Limpieza solo al desmontar el componente
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.emit('usuario-en-linea', {
+          usuario_id: usuario.id,
+          nombre: usuario.nombre,
+          enLinea: false
+        });
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, []); // Solo se ejecuta una vez al montar
 
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
@@ -166,25 +161,6 @@ function SupervisorPanel({ token, usuario }) {
       });
       setSinLeerGeneral(0);
     } catch {}
-  };
-
-  const handleBorrarChatGeneral = async () => {
-    if (window.confirm('¿Seguro que quieres borrar TODOS los mensajes del chat general?')) {
-      try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          alert('Chat general borrado correctamente.');
-          setSinLeerGeneral(0);
-        } else {
-          alert('Error al borrar el chat.');
-        }
-      } catch {
-        alert('No se pudo conectar al servidor.');
-      }
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -244,9 +220,10 @@ function SupervisorPanel({ token, usuario }) {
     setEditId(null);
   };
 
+  // Selección de destinatario para chat privado (solo desde el panel lateral)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
-    setActiveTabPersist('chat-privado');
+    setActiveTab('chat-privado');
   };
 
   // Cambiar estado en línea manualmente al hacer clic en el icono
@@ -377,7 +354,6 @@ function SupervisorPanel({ token, usuario }) {
           position: 'sticky',
           top: 40
         }}>
-          {/* Icono de estado en línea/desconectado arriba de administración */}
           {renderEstadoEnLinea()}
           <button
             style={{
@@ -436,25 +412,6 @@ function SupervisorPanel({ token, usuario }) {
               </span>
             )}
           </div>
-          <button
-            style={{
-              width: 120,
-              padding: '8px 0',
-              background: activeTab === 'chat-privado' ? '#007bff' : '#eee',
-              color: activeTab === 'chat-privado' ? '#fff' : '#333',
-              border: activeTab === 'chat-privado' ? '2px solid #222' : 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: 16,
-              boxShadow: activeTab === 'chat-privado' ? '0 2px 6px rgba(0,0,0,0.09)' : undefined,
-              textAlign: 'center'
-            }}
-            onClick={() => setActiveTabPersist('chat-privado')}
-          >
-            Chat privado
-          </button>
-          {/* Panel de usuarios conectados y desconectados por fuera de las pestañas */}
           {renderUsuariosPanel()}
         </div>
         <div style={{ flex: 1 }}>
@@ -534,57 +491,14 @@ function SupervisorPanel({ token, usuario }) {
             </div>
           )}
 
-          {activeTab === 'chat-privado' && (
-            <div>
-              <h3>Selecciona un usuario para chatear en privado:</h3>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-                {usuarios
-                  .filter(u => u.id !== usuario.id)
-                  .map(u => {
-                    const enLinea = usuariosEnLinea.some(ul => ul.usuario_id === u.id);
-                    return (
-                      <button
-                        key={u.id}
-                        style={{
-                          padding: '6px 14px',
-                          background: destinatario?.id === u.id ? '#007bff' : '#e6f7ff',
-                          color: destinatario?.id === u.id ? '#fff' : '#007bff',
-                          border: '1px solid #007bff',
-                          borderRadius: 6,
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8
-                        }}
-                        onClick={() => handleSelectDestinatario(u)}
-                      >
-                        {u.nombre}
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            background: enLinea ? '#28a745' : '#ccc',
-                            display: 'inline-block'
-                          }}
-                          title={enLinea ? 'En línea' : 'Desconectado'}
-                        ></span>
-                      </button>
-                    );
-                  })}
-              </div>
-              {destinatario ? (
-                <ChatPrivado
-                  token={token}
-                  usuario={usuario}
-                  socket={null}
-                  destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
-                />
-              ) : (
-                <p style={{ color: '#888' }}>Selecciona un usuario para iniciar el chat privado.</p>
-              )}
-            </div>
+          {activeTab === 'chat-privado' && destinatario && (
+            <ChatPrivado
+              token={token}
+              usuario={usuario}
+              socket={socketRef.current}
+              destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
+              onVolver={() => setActiveTab('usuarios')}
+            />
           )}
         </div>
       </div>
