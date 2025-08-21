@@ -4,16 +4,20 @@ import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
 import Toasts from './Toasts';
 
-function UserPanel({ token, usuario }) {
+function UserPanel({ token, usuario, socket }) {
   const [activeTab, setActiveTab] = useState('perfil');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [destinatario, setDestinatario] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
-  const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
   const [usuariosTodos, setUsuariosTodos] = useState([]);
-  const socketRef = useRef(null);
+  const socketRef = useRef(socket);
+
+  // Estado en línea persistente solo por botón o logout
+  const [enLinea, setEnLinea] = useState(
+    localStorage.getItem(`enLinea_${usuario.id}`) === 'false' ? false : true
+  );
 
   // Restaurar pestaña y destinatario al cargar
   useEffect(() => {
@@ -101,32 +105,32 @@ function UserPanel({ token, usuario }) {
       const interval = setInterval(fetchSinLeerGeneral, 10000);
 
       // Conexión Socket.IO
-      const socket = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
+      const socketInstance = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
         transports: ['websocket'],
         autoConnect: true
       });
-      socketRef.current = socket;
+      socketRef.current = socketInstance;
 
       // Notificar al backend que el usuario está en línea
-      socket.emit('usuario-en-linea', {
+      socketInstance.emit('usuario-en-linea', {
         usuario_id: usuario.id,
         nombre: usuario.nombre,
-        enLinea: true
+        enLinea: enLinea
       });
 
-      socket.on('connect', () => {
-        socket.emit('usuario-en-linea', {
+      socketInstance.on('connect', () => {
+        socketInstance.emit('usuario-en-linea', {
           usuario_id: usuario.id,
           nombre: usuario.nombre,
-          enLinea: true
+          enLinea: enLinea
         });
       });
 
-      socket.on('usuarios-en-linea', (usuarios) => {
+      socketInstance.on('usuarios-en-linea', (usuarios) => {
         setUsuariosEnLinea(usuarios);
       });
 
-      socket.on('nuevo-mensaje', (mensaje) => {
+      socketInstance.on('nuevo-mensaje', (mensaje) => {
         fetchSinLeerGeneral();
         if (mensaje.usuario_id !== usuario.id) {
           const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
@@ -152,21 +156,27 @@ function UserPanel({ token, usuario }) {
         }
       });
 
-      // Al desmontar, notificar que el usuario está fuera de línea
       return () => {
         clearInterval(interval);
-        if (socketRef.current) {
-          socketRef.current.emit('usuario-en-linea', {
-            usuario_id: usuario.id,
-            nombre: usuario.nombre,
-            enLinea: false
-          });
-          socketRef.current.disconnect();
-          socketRef.current = null;
-        }
       };
     }
-  }, [usuario?.id, token]);
+  }, [usuario?.id, token, enLinea]);
+
+  // Emitir estado en línea por socket y guardar en localStorage solo cuando cambie manualmente
+  useEffect(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('usuario-en-linea', {
+        usuario_id: usuario.id,
+        nombre: usuario.nombre,
+        enLinea: enLinea
+      });
+      localStorage.setItem(`enLinea_${usuario.id}`, enLinea ? 'true' : 'false');
+    }
+  }, [enLinea, usuario.id]);
+
+  const cambiarEstadoLineaManual = () => {
+    setEnLinea(prev => !prev);
+  };
 
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
@@ -181,20 +191,6 @@ function UserPanel({ token, usuario }) {
       });
       setSinLeerGeneral(0);
     } catch {}
-  };
-
-  // Cambiar estado en línea manualmente al hacer clic en el icono
-  const cambiarEstadoLineaManual = () => {
-    const nuevoEstado = !enLinea;
-    setEnLinea(nuevoEstado);
-    localStorage.setItem(`enLinea_${usuario.id}`, nuevoEstado ? 'true' : 'false');
-    if (socketRef.current) {
-      socketRef.current.emit('usuario-en-linea', {
-        usuario_id: usuario.id,
-        nombre: usuario.nombre,
-        enLinea: nuevoEstado
-      });
-    }
   };
 
   // Selección de destinatario para chat privado (solo desde el panel lateral)

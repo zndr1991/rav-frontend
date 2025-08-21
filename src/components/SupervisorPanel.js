@@ -17,8 +17,12 @@ function SupervisorPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const [usuariosTodos, setUsuariosTodos] = useState([]);
-  const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
   const socketRef = useRef(null);
+
+  // Estado en línea persistente solo por botón o logout
+  const [enLinea, setEnLinea] = useState(
+    localStorage.getItem(`enLinea_${usuario.id}`) === 'false' ? false : true
+  );
 
   // Restaurar pestaña y destinatario al cargar
   useEffect(() => {
@@ -106,7 +110,7 @@ function SupervisorPanel({ token, usuario }) {
         socketRef.current.emit('usuario-en-linea', {
           usuario_id: usuario.id,
           nombre: usuario.nombre,
-          enLinea: true
+          enLinea: enLinea
         });
       });
 
@@ -140,20 +144,24 @@ function SupervisorPanel({ token, usuario }) {
         }
       });
     }
+    return () => {};
+  }, [usuario?.id, token, enLinea]);
 
-    // Limpieza solo al desmontar el componente
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.emit('usuario-en-linea', {
-          usuario_id: usuario.id,
-          nombre: usuario.nombre,
-          enLinea: false
-        });
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-    };
-  }, []); // Solo se ejecuta una vez al montar
+  // Emitir estado en línea por socket y guardar en localStorage solo cuando cambie manualmente
+  useEffect(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('usuario-en-linea', {
+        usuario_id: usuario.id,
+        nombre: usuario.nombre,
+        enLinea: enLinea
+      });
+      localStorage.setItem(`enLinea_${usuario.id}`, enLinea ? 'true' : 'false');
+    }
+  }, [enLinea, usuario.id]);
+
+  const cambiarEstadoLineaManual = () => {
+    setEnLinea(prev => !prev);
+  };
 
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
@@ -241,20 +249,6 @@ function SupervisorPanel({ token, usuario }) {
     setDestinatario(null);
     localStorage.setItem('supervisorActiveTab', 'usuarios');
     localStorage.removeItem('supervisorChatPrivadoDestinatario');
-  };
-
-  // Cambiar estado en línea manualmente al hacer clic en el icono
-  const cambiarEstadoLineaManual = () => {
-    const nuevoEstado = !enLinea;
-    setEnLinea(nuevoEstado);
-    localStorage.setItem(`enLinea_${usuario.id}`, nuevoEstado ? 'true' : 'false');
-    if (socketRef.current) {
-      socketRef.current.emit('usuario-en-linea', {
-        usuario_id: usuario.id,
-        nombre: usuario.nombre,
-        enLinea: nuevoEstado
-      });
-    }
   };
 
   // Panel de usuarios conectados y desconectados (por fuera de las pestañas)
