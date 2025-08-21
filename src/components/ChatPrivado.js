@@ -233,7 +233,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
   };
 
   const puedeBorrar = (msg) =>
-    usuario.rol === 'supervisor' || usuario.id === msg.remitente_id;
+    usuario.id === msg.remitente_id;
 
   const puedeEditar = (msg) =>
     usuario.id === msg.remitente_id ||
