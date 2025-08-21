@@ -41,7 +41,6 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
     }
   };
 
-  // Solo depende de token y destinatario.id para evitar bucle infinito
   useEffect(() => {
     if (destinatario?.id) fetchMensajes();
   }, [token, destinatario?.id]);
@@ -68,8 +67,14 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
       );
     };
 
+    // Evento para borrar mensaje privado en tiempo real
+    const handleMensajeBorradoPrivado = (data) => {
+      setMensajes(prev => prev.filter(m => m.id !== Number(data.id)));
+    };
+
     socket.on('nuevo-mensaje-privado', handleNuevoMensajePrivado);
     socket.on('mensaje-editado-privado', handleMensajeEditadoPrivado);
+    socket.on('mensaje-borrado-privado', handleMensajeBorradoPrivado);
 
     // Solo emitir usuario-en-linea al conectar o cambiar estado manualmente
     socket.emit('usuario-en-linea', {
@@ -81,6 +86,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
     return () => {
       socket.off('nuevo-mensaje-privado', handleNuevoMensajePrivado);
       socket.off('mensaje-editado-privado', handleMensajeEditadoPrivado);
+      socket.off('mensaje-borrado-privado', handleMensajeBorradoPrivado);
     };
   }, [socket, usuario.id, destinatario?.id, enLinea]);
 
@@ -185,6 +191,10 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
+        // Emitir evento por socket para que ambos usuarios actualicen en tiempo real
+        if (socket) {
+          socket.emit('mensaje-borrado-privado', { id });
+        }
         setMensajes(prev => prev.filter(m => m.id !== id));
       }
     } catch {

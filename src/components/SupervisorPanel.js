@@ -20,16 +20,23 @@ function SupervisorPanel({ token, usuario }) {
   const [enLinea, setEnLinea] = useState(localStorage.getItem(`enLinea_${usuario.id}`) === 'true');
   const socketRef = useRef(null);
 
+  // Restaurar pestaña y destinatario al cargar
+  useEffect(() => {
+    const savedTab = localStorage.getItem('supervisorActiveTab');
+    const savedDestinatario = localStorage.getItem('supervisorChatPrivadoDestinatario');
+    if (savedTab) setActiveTab(savedTab);
+    if (savedTab === 'chat-privado' && savedDestinatario) {
+      try {
+        setDestinatario(JSON.parse(savedDestinatario));
+      } catch {}
+    }
+  }, []);
+
   // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
     localStorage.setItem('supervisorActiveTab', tab);
   };
-
-  useEffect(() => {
-    const savedTab = localStorage.getItem('supervisorActiveTab');
-    if (savedTab) setActiveTab(savedTab);
-  }, []);
 
   const fetchUsuarios = async () => {
     try {
@@ -224,6 +231,16 @@ function SupervisorPanel({ token, usuario }) {
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
     setActiveTab('chat-privado');
+    localStorage.setItem('supervisorActiveTab', 'chat-privado');
+    localStorage.setItem('supervisorChatPrivadoDestinatario', JSON.stringify(user));
+  };
+
+  // Volver a administración y limpiar destinatario en localStorage
+  const handleVolver = () => {
+    setActiveTab('usuarios');
+    setDestinatario(null);
+    localStorage.setItem('supervisorActiveTab', 'usuarios');
+    localStorage.removeItem('supervisorChatPrivadoDestinatario');
   };
 
   // Cambiar estado en línea manualmente al hacer clic en el icono
@@ -497,7 +514,7 @@ function SupervisorPanel({ token, usuario }) {
               usuario={usuario}
               socket={socketRef.current}
               destinatario={{ id: destinatario.id, nombre: destinatario.nombre }}
-              onVolver={() => setActiveTab('usuarios')}
+              onVolver={handleVolver}
             />
           )}
         </div>
