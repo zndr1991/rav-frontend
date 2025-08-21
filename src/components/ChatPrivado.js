@@ -13,6 +13,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
   const [editandoTexto, setEditandoTexto] = useState('');
   const [mensajeOriginal, setMensajeOriginal] = useState({});
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
+  const [noLeidos, setNoLeidos] = useState(0); // <-- contador de mensajes no leídos
   const scrollRef = useRef(null);
 
   // Estado en línea persistente por usuario
@@ -43,6 +44,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
 
   useEffect(() => {
     if (destinatario?.id) fetchMensajes();
+    setNoLeidos(0); // Reinicia el contador al abrir el chat
   }, [token, destinatario?.id]);
 
   // Socket.IO para tiempo real
@@ -56,6 +58,10 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
       ) {
         setMensajes(prev => [...prev, mensaje]);
         setAutoScroll(true);
+        // Si el mensaje lo envió el destinatario, aumenta el contador
+        if (mensaje.remitente_id === destinatario.id) {
+          setNoLeidos(prev => prev + 1);
+        }
       }
     };
 
@@ -281,6 +287,22 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
       >
         Volver
       </button>
+      <div style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 8 }}>
+        {destinatario?.nombre}
+        {noLeidos > 0 && (
+          <span style={{
+            marginLeft: 8,
+            background: '#dc3545',
+            color: '#fff',
+            borderRadius: '50%',
+            padding: '2px 8px',
+            fontSize: 14,
+            fontWeight: 'bold'
+          }}>
+            {noLeidos}
+          </span>
+        )}
+      </div>
       <div
         ref={scrollRef}
         onScroll={handleScroll}

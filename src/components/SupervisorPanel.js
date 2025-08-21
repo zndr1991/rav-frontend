@@ -17,14 +17,13 @@ function SupervisorPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const [usuariosTodos, setUsuariosTodos] = useState([]);
+  const [privadosNoLeidos, setPrivadosNoLeidos] = useState({});
   const socketRef = useRef(null);
 
-  // Estado en línea persistente solo por botón o logout
   const [enLinea, setEnLinea] = useState(
     localStorage.getItem(`enLinea_${usuario.id}`) === 'false' ? false : true
   );
 
-  // Restaurar pestaña y destinatario al cargar
   useEffect(() => {
     const savedTab = localStorage.getItem('supervisorActiveTab');
     const savedDestinatario = localStorage.getItem('supervisorChatPrivadoDestinatario');
@@ -36,7 +35,6 @@ function SupervisorPanel({ token, usuario }) {
     }
   }, []);
 
-  // Persistencia de pestaña activa
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
     localStorage.setItem('supervisorActiveTab', tab);
@@ -98,7 +96,6 @@ function SupervisorPanel({ token, usuario }) {
     }, 200);
   };
 
-  // Mantener el socket abierto y emitir en línea al conectar
   useEffect(() => {
     if (!socketRef.current && usuario?.id && token) {
       socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
@@ -143,11 +140,23 @@ function SupervisorPanel({ token, usuario }) {
           }
         }
       });
+
+      // --- NUEVO: Contador de mensajes privados no leídos ---
+      socketRef.current.on('nuevo-mensaje-privado', (mensaje) => {
+        if (
+          mensaje.destinatario_id === usuario.id &&
+          (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
+        ) {
+          setPrivadosNoLeidos(prev => ({
+            ...prev,
+            [mensaje.remitente_id]: (prev[mensaje.remitente_id] || 0) + 1
+          }));
+        }
+      });
     }
     return () => {};
-  }, [usuario?.id, token, enLinea]);
+  }, [usuario?.id, token, enLinea, destinatario, activeTab]);
 
-  // Emitir estado en línea por socket y guardar en localStorage solo cuando cambie manualmente
   useEffect(() => {
     if (socketRef.current) {
       socketRef.current.emit('usuario-en-linea', {
@@ -235,15 +244,14 @@ function SupervisorPanel({ token, usuario }) {
     setEditId(null);
   };
 
-  // Selección de destinatario para chat privado (solo desde el panel lateral)
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
     setActiveTab('chat-privado');
     localStorage.setItem('supervisorActiveTab', 'chat-privado');
     localStorage.setItem('supervisorChatPrivadoDestinatario', JSON.stringify(user));
+    setPrivadosNoLeidos(prev => ({ ...prev, [user.id]: 0 }));
   };
 
-  // Volver a administración y limpiar destinatario en localStorage
   const handleVolver = () => {
     setActiveTab('usuarios');
     setDestinatario(null);
@@ -251,7 +259,6 @@ function SupervisorPanel({ token, usuario }) {
     localStorage.removeItem('supervisorChatPrivadoDestinatario');
   };
 
-  // Panel de usuarios conectados y desconectados (por fuera de las pestañas)
   const renderUsuariosPanel = () => {
     const conectadosIds = usuariosEnLinea.map(u => u.usuario_id);
     const conectados = usuariosTodos.filter(u => conectadosIds.includes(u.id));
@@ -294,14 +301,40 @@ function SupervisorPanel({ token, usuario }) {
                 display: 'inline-block'
               }}></span>
               <span style={{
-                overflow: 'hidden',
+                overflow: 'visible',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                maxWidth: 80,
+                maxWidth: 100,
                 textDecoration: u.id !== usuario.id ? 'underline' : 'none',
-                color: u.id !== usuario.id ? '#007bff' : '#333'
+                color: u.id !== usuario.id ? '#007bff' : '#333',
+                position: 'relative',
+                display: 'inline-block',
+                paddingRight: 28
               }}>
                 {u.nombre || u.email || `ID ${u.id}`}
+                {privadosNoLeidos[u.id] > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    right: 2,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: '#dc3545',
+                    color: '#fff',
+                    borderRadius: '50%',
+                    minWidth: 24,
+                    height: 24,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 15,
+                    fontWeight: 'bold',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                    zIndex: 2,
+                    border: '2px solid #fff'
+                  }}>
+                    {privadosNoLeidos[u.id]}
+                  </span>
+                )}
               </span>
             </li>
           ))}
@@ -310,7 +343,6 @@ function SupervisorPanel({ token, usuario }) {
     );
   };
 
-  // Icono de estado en línea/desconectado arriba de administración, clickeable
   const renderEstadoEnLinea = () => (
     <div
       style={{
