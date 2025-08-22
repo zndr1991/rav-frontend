@@ -39,6 +39,24 @@ function UserPanel({ token, usuario, socket }) {
     localStorage.setItem('privadosNoLeidos', JSON.stringify(privadosNoLeidos));
   }, [privadosNoLeidos]);
 
+  // Consultar mensajes privados no leídos al cargar el usuario (para usuarios desconectados)
+  useEffect(() => {
+    const fetchNoLeidosPrivados = async () => {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.noLeidos) {
+          setPrivadosNoLeidos(data.noLeidos);
+        }
+      } catch {}
+    };
+    if (usuario?.id && token) {
+      fetchNoLeidosPrivados();
+    }
+  }, [usuario?.id, token]);
+
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
     localStorage.setItem('userActiveTab', tab);
