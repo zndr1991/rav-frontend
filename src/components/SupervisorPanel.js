@@ -17,7 +17,6 @@ function SupervisorPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const [usuariosTodos, setUsuariosTodos] = useState([]);
-  // Estado inicial desde localStorage para mantener los globos tras recargar
   const [privadosNoLeidos, setPrivadosNoLeidos] = useState(() => {
     const guardados = localStorage.getItem('privadosNoLeidos');
     return guardados ? JSON.parse(guardados) : {};
@@ -39,12 +38,10 @@ function SupervisorPanel({ token, usuario }) {
     }
   }, []);
 
-  // Guardar el contador en localStorage cada vez que cambie
   useEffect(() => {
     localStorage.setItem('privadosNoLeidos', JSON.stringify(privadosNoLeidos));
   }, [privadosNoLeidos]);
 
-  // Consultar mensajes privados no leídos al cargar el usuario (para usuarios desconectados)
   useEffect(() => {
     const fetchNoLeidosPrivados = async () => {
       try {
@@ -168,7 +165,6 @@ function SupervisorPanel({ token, usuario }) {
         }
       });
 
-      // --- NUEVO: Contador de mensajes privados no leídos ---
       socketRef.current.on('nuevo-mensaje-privado', (mensaje) => {
         if (
           mensaje.destinatario_id === usuario.id &&
@@ -199,19 +195,38 @@ function SupervisorPanel({ token, usuario }) {
     setEnLinea(prev => !prev);
   };
 
-  const handleChatGeneralClick = async () => {
-    setActiveTabPersist('chat-general');
+  // Marcar mensajes privados como leídos en el backend
+  const marcarMensajesPrivadosLeidos = async (remitenteId) => {
     try {
-      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/visit`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/chat/private/read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ usuario_id: usuario.id })
+        body: JSON.stringify({
+          usuario_id: usuario.id,
+          remitente_id: remitenteId
+        })
       });
-      setSinLeerGeneral(0);
     } catch {}
+  };
+
+  // Reinicia el contador y marca como leídos en el backend al abrir el chat privado
+  const handleSelectDestinatario = (user) => {
+    setDestinatario(user);
+    setActiveTab('chat-privado');
+    localStorage.setItem('supervisorActiveTab', 'chat-privado');
+    localStorage.setItem('supervisorChatPrivadoDestinatario', JSON.stringify(user));
+    setPrivadosNoLeidos(prev => ({ ...prev, [user.id]: 0 }));
+    marcarMensajesPrivadosLeidos(user.id);
+  };
+
+  const handleVolver = () => {
+    setActiveTab('usuarios');
+    setDestinatario(null);
+    localStorage.setItem('supervisorActiveTab', 'usuarios');
+    localStorage.removeItem('supervisorChatPrivadoDestinatario');
   };
 
   const handleSubmit = async (e) => {
@@ -269,22 +284,6 @@ function SupervisorPanel({ token, usuario }) {
   const handleCancelEdit = () => {
     setForm(initialForm);
     setEditId(null);
-  };
-
-  // Borrar el contador solo cuando el usuario abre el chat privado
-  const handleSelectDestinatario = (user) => {
-    setDestinatario(user);
-    setActiveTab('chat-privado');
-    localStorage.setItem('supervisorActiveTab', 'chat-privado');
-    localStorage.setItem('supervisorChatPrivadoDestinatario', JSON.stringify(user));
-    setPrivadosNoLeidos(prev => ({ ...prev, [user.id]: 0 }));
-  };
-
-  const handleVolver = () => {
-    setActiveTab('usuarios');
-    setDestinatario(null);
-    localStorage.setItem('supervisorActiveTab', 'usuarios');
-    localStorage.removeItem('supervisorChatPrivadoDestinatario');
   };
 
   const renderUsuariosPanel = () => {
@@ -405,6 +404,21 @@ function SupervisorPanel({ token, usuario }) {
       </span>
     </div>
   );
+
+  const handleChatGeneralClick = async () => {
+    setActiveTabPersist('chat-general');
+    try {
+      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/visit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ usuario_id: usuario.id })
+      });
+      setSinLeerGeneral(0);
+    } catch {}
+  };
 
   return (
     <div style={{ maxWidth: 1300, margin: 'auto', padding: 20 }}>

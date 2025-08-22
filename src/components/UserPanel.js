@@ -12,7 +12,6 @@ function UserPanel({ token, usuario, socket }) {
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const [usuariosTodos, setUsuariosTodos] = useState([]);
-  // Estado inicial desde localStorage para mantener los globos tras recargar
   const [privadosNoLeidos, setPrivadosNoLeidos] = useState(() => {
     const guardados = localStorage.getItem('privadosNoLeidos');
     return guardados ? JSON.parse(guardados) : {};
@@ -34,12 +33,10 @@ function UserPanel({ token, usuario, socket }) {
     }
   }, []);
 
-  // Guardar el contador en localStorage cada vez que cambie
   useEffect(() => {
     localStorage.setItem('privadosNoLeidos', JSON.stringify(privadosNoLeidos));
   }, [privadosNoLeidos]);
 
-  // Consultar mensajes privados no leídos al cargar el usuario (para usuarios desconectados)
   useEffect(() => {
     const fetchNoLeidosPrivados = async () => {
       try {
@@ -210,6 +207,40 @@ function UserPanel({ token, usuario, socket }) {
     setEnLinea(prev => !prev);
   };
 
+  // Marcar mensajes privados como leídos en el backend
+  const marcarMensajesPrivadosLeidos = async (remitenteId) => {
+    try {
+      await fetch(`${process.env.REACT_APP_API_URL}/chat/private/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          usuario_id: usuario.id,
+          remitente_id: remitenteId
+        })
+      });
+    } catch {}
+  };
+
+  // Borrar el contador y marcar como leídos cuando el usuario abre el chat privado
+  const handleSelectDestinatario = (user) => {
+    setDestinatario(user);
+    setActiveTab('chat-privado');
+    localStorage.setItem('userActiveTab', 'chat-privado');
+    localStorage.setItem('userChatPrivadoDestinatario', JSON.stringify(user));
+    setPrivadosNoLeidos(prev => ({ ...prev, [user.id]: 0 }));
+    marcarMensajesPrivadosLeidos(user.id);
+  };
+
+  const handleVolver = () => {
+    setActiveTab('perfil');
+    setDestinatario(null);
+    localStorage.setItem('userActiveTab', 'perfil');
+    localStorage.removeItem('userChatPrivadoDestinatario');
+  };
+
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
     try {
@@ -223,22 +254,6 @@ function UserPanel({ token, usuario, socket }) {
       });
       setSinLeerGeneral(0);
     } catch {}
-  };
-
-  // Borrar el contador solo cuando el usuario abre el chat privado
-  const handleSelectDestinatario = (user) => {
-    setDestinatario(user);
-    setActiveTab('chat-privado');
-    localStorage.setItem('userActiveTab', 'chat-privado');
-    localStorage.setItem('userChatPrivadoDestinatario', JSON.stringify(user));
-    setPrivadosNoLeidos(prev => ({ ...prev, [user.id]: 0 }));
-  };
-
-  const handleVolver = () => {
-    setActiveTab('perfil');
-    setDestinatario(null);
-    localStorage.setItem('userActiveTab', 'perfil');
-    localStorage.removeItem('userChatPrivadoDestinatario');
   };
 
   const renderUsuariosPanel = () => {
