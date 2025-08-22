@@ -152,12 +152,46 @@ function SupervisorPanel({ token, usuario }) {
 
       socketRef.current.on('nuevo-mensaje', (mensaje) => {
         fetchSinLeerGeneral();
-        // Aquí tu lógica de notificaciones y toasts
+        if (mensaje.usuario_id !== usuario.id) {
+          const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
+          if (window.Notification && Notification.permission === 'granted') {
+            const noti = new Notification(`Nuevo mensaje de ${nombreRemitente}`, {
+              body: mensaje.texto,
+              icon: '/icono.png'
+            });
+            noti.onclick = () => {
+              setActiveTabPersist('chat-general');
+              setTimeout(() => {
+                window.focus();
+                window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensaje.id }));
+              }, 200);
+              noti.close();
+            };
+          }
+          showToast(`Nuevo mensaje de ${nombreRemitente}`, mensaje.texto, mensaje.id);
+
+          if (activeTab !== 'chat-general') {
+            localStorage.setItem('mensajePendiente', mensaje.id);
+          }
+        }
       });
 
-      socketRef.current.on('nuevo-mensaje-privado', (mensaje) => {
-        // Aquí tu lógica de privados no leídos
+socketRef.current.on('nuevo-mensaje-privado', async (mensaje) => {
+  if (
+    mensaje.destinatario_id === usuario.id &&
+    (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
+  ) {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+      const data = await res.json();
+      if (data.noLeidos) {
+        setPrivadosNoLeidos(data.noLeidos);
+      }
+    } catch {}
+  }
+});
 
       return () => {
         clearInterval(interval);

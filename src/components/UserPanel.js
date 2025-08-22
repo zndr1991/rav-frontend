@@ -174,17 +174,22 @@ function UserPanel({ token, usuario }) {
         }
       });
 
-      socketRef.current.on('nuevo-mensaje-privado', (mensaje) => {
-        if (
-          mensaje.destinatario_id === usuario.id &&
-          (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
-        ) {
-          setPrivadosNoLeidos(prev => ({
-            ...prev,
-            [mensaje.remitente_id]: (prev[mensaje.remitente_id] || 0) + 1
-          }));
-        }
+socketRef.current.on('nuevo-mensaje-privado', async (mensaje) => {
+  if (
+    mensaje.destinatario_id === usuario.id &&
+    (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
+  ) {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+      const data = await res.json();
+      if (data.noLeidos) {
+        setPrivadosNoLeidos(data.noLeidos);
+      }
+    } catch {}
+  }
+});
 
       return () => {
         clearInterval(interval);

@@ -54,10 +54,16 @@ function ChatGeneral({ token, usuario }) {
 
   useEffect(() => {
     socketRef.current.on('nuevo-mensaje', (mensaje) => {
-      setMensajes(prev => [...prev, mensaje]);
+      // Evita duplicar el mensaje si tú lo enviaste
+      if (mensaje.usuario_id === usuario.id) return;
+      // Evita duplicar si el mensaje ya existe en el estado
+      setMensajes(prev => {
+         if (prev.some(m => m.id === mensaje.id)) return prev;
+         return [...prev, mensaje];
+      });
       setAutoScroll(true);
-    });
-
+    });  
+    
     socketRef.current.on('mensaje-editado', (msgEditado) => {
       setMensajes(prev =>
         prev.map(m =>
@@ -207,6 +213,7 @@ function ChatGeneral({ token, usuario }) {
       }
       setMensajeTexto('');
       setAutoScroll(true);
+      await fetchMensajes(); // Actualiza los mensajes después de enviar
     } catch {
       setError('No se pudo enviar el mensaje.');
     }

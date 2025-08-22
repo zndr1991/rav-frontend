@@ -13,10 +13,9 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
   const [editandoTexto, setEditandoTexto] = useState('');
   const [mensajeOriginal, setMensajeOriginal] = useState({});
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
-  const [noLeidos, setNoLeidos] = useState(0); // <-- contador de mensajes no leídos
+  const [noLeidos, setNoLeidos] = useState(0);
   const scrollRef = useRef(null);
 
-  // Estado en línea persistente por usuario
   const estadoInicial = localStorage.getItem(`enLinea_${usuario.id}`) === 'true';
   const [enLinea, setEnLinea] = useState(estadoInicial);
 
@@ -44,10 +43,23 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
 
   useEffect(() => {
     if (destinatario?.id) fetchMensajes();
-    setNoLeidos(0); // Reinicia el contador al abrir el chat
+    setNoLeidos(0);
+    // Marca como leídos en el backend al abrir el chat
+    if (destinatario?.id) {
+      fetch(`${process.env.REACT_APP_API_URL}/chat/private/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          usuario_id: usuario.id,
+          remitente_id: destinatario.id
+        })
+      });
+    }
   }, [token, destinatario?.id]);
 
-  // Socket.IO para tiempo real
   useEffect(() => {
     if (!socket) return;
 
@@ -56,9 +68,11 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
         (mensaje.remitente_id === usuario.id && mensaje.destinatario_id === destinatario.id) ||
         (mensaje.remitente_id === destinatario.id && mensaje.destinatario_id === usuario.id)
       ) {
-        setMensajes(prev => [...prev, mensaje]);
+        setMensajes(prev => {
+          if (prev.some(m => m.id === mensaje.id)) return prev;
+          return [...prev, mensaje];
+        });
         setAutoScroll(true);
-        // Si el mensaje lo envió el destinatario, aumenta el contador
         if (mensaje.remitente_id === destinatario.id) {
           setNoLeidos(prev => prev + 1);
         }
@@ -73,7 +87,6 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
       );
     };
 
-    // Evento para borrar mensaje privado en tiempo real
     const handleMensajeBorradoPrivado = (data) => {
       setMensajes(prev => prev.filter(m => m.id !== Number(data.id)));
     };
@@ -82,7 +95,6 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
     socket.on('mensaje-editado-privado', handleMensajeEditadoPrivado);
     socket.on('mensaje-borrado-privado', handleMensajeBorradoPrivado);
 
-    // Solo emitir usuario-en-linea al conectar o cambiar estado manualmente
     socket.emit('usuario-en-linea', {
       usuario_id: usuario.id,
       nombre: usuario.nombre,
@@ -197,7 +209,6 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        // Emitir evento por socket para que ambos usuarios actualicen en tiempo real
         if (socket) {
           socket.emit('mensaje-borrado-privado', { id });
         }
