@@ -17,7 +17,11 @@ function SupervisorPanel({ token, usuario }) {
   const [destinatario, setDestinatario] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const [usuariosTodos, setUsuariosTodos] = useState([]);
-  const [privadosNoLeidos, setPrivadosNoLeidos] = useState({});
+  // Estado inicial desde localStorage para mantener los globos tras recargar
+  const [privadosNoLeidos, setPrivadosNoLeidos] = useState(() => {
+    const guardados = localStorage.getItem('privadosNoLeidos');
+    return guardados ? JSON.parse(guardados) : {};
+  });
   const socketRef = useRef(null);
 
   const [enLinea, setEnLinea] = useState(
@@ -34,6 +38,11 @@ function SupervisorPanel({ token, usuario }) {
       } catch {}
     }
   }, []);
+
+  // Guardar el contador en localStorage cada vez que cambie
+  useEffect(() => {
+    localStorage.setItem('privadosNoLeidos', JSON.stringify(privadosNoLeidos));
+  }, [privadosNoLeidos]);
 
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
@@ -244,6 +253,7 @@ function SupervisorPanel({ token, usuario }) {
     setEditId(null);
   };
 
+  // Borrar el contador solo cuando el usuario abre el chat privado
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
     setActiveTab('chat-privado');

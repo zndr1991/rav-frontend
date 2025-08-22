@@ -12,7 +12,11 @@ function UserPanel({ token, usuario, socket }) {
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const [usuariosTodos, setUsuariosTodos] = useState([]);
-  const [privadosNoLeidos, setPrivadosNoLeidos] = useState({});
+  // Estado inicial desde localStorage para mantener los globos tras recargar
+  const [privadosNoLeidos, setPrivadosNoLeidos] = useState(() => {
+    const guardados = localStorage.getItem('privadosNoLeidos');
+    return guardados ? JSON.parse(guardados) : {};
+  });
   const socketRef = useRef(socket);
 
   const [enLinea, setEnLinea] = useState(
@@ -29,6 +33,11 @@ function UserPanel({ token, usuario, socket }) {
       } catch {}
     }
   }, []);
+
+  // Guardar el contador en localStorage cada vez que cambie
+  useEffect(() => {
+    localStorage.setItem('privadosNoLeidos', JSON.stringify(privadosNoLeidos));
+  }, [privadosNoLeidos]);
 
   const setActiveTabPersist = (tab) => {
     setActiveTab(tab);
@@ -198,6 +207,7 @@ function UserPanel({ token, usuario, socket }) {
     } catch {}
   };
 
+  // Borrar el contador solo cuando el usuario abre el chat privado
   const handleSelectDestinatario = (user) => {
     setDestinatario(user);
     setActiveTab('chat-privado');
