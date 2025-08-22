@@ -3,6 +3,12 @@ import { io } from 'socket.io-client';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+// Inicializa el socket UNA SOLA VEZ fuera del componente
+const socketInstance = io('http://localhost:3001', {
+  transports: ['websocket'],
+  autoConnect: true
+});
+
 function ChatGeneral({ token, usuario }) {
   const [mensajes, setMensajes] = useState([]);
   const [mensajeTexto, setMensajeTexto] = useState('');
@@ -16,10 +22,9 @@ function ChatGeneral({ token, usuario }) {
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [usuariosEnLinea, setUsuariosEnLinea] = useState([]);
   const scrollRef = useRef(null);
-  const socketRef = useRef(null);
+  const socketRef = useRef(socketInstance);
   const usuariosEnLineaRef = useRef([]);
 
-  // El estado enLinea solo lo controla el usuario
   const estadoInicial = localStorage.getItem(`enLinea_${usuario.id}`) === 'true';
   const [enLinea, setEnLinea] = useState(estadoInicial);
 
@@ -48,12 +53,6 @@ function ChatGeneral({ token, usuario }) {
   }, [token]);
 
   useEffect(() => {
-    socketRef.current = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
-      transports: ['websocket'],
-      autoConnect: true,
-      auth: { token }
-    });
-
     socketRef.current.on('nuevo-mensaje', (mensaje) => {
       setMensajes(prev => [...prev, mensaje]);
       setAutoScroll(true);
@@ -102,7 +101,6 @@ function ChatGeneral({ token, usuario }) {
       });
     });
 
-    // --- Escuchar el evento de borrado en tiempo real ---
     socketRef.current.on('chat-general-borrado', () => {
       setMensajes([]);
       toast.info('El chat general ha sido borrado.', {
@@ -112,23 +110,19 @@ function ChatGeneral({ token, usuario }) {
       console.log('Evento chat-general-borrado recibido');
     });
 
-    // --- Escuchar el evento de borrado de mensaje individual ---
     socketRef.current.on('mensaje-borrado', (mensajeId) => {
       console.log('Recibido mensaje-borrado', mensajeId);
       setMensajes(prev => prev.filter(m => String(m.id) !== String(mensajeId)));
     });
 
-    return () => {
-      // Ya no cambiamos enLinea automáticamente aquí
-      socketRef.current.disconnect();
-    };
+    // No desconectes el socket aquí
+    return () => {};
   }, [token, usuario.id, usuario.nombre, enLinea]);
 
   useEffect(() => {
     localStorage.setItem(`enLinea_${usuario.id}`, enLinea ? 'true' : 'false');
   }, [enLinea, usuario.id]);
 
-  // El usuario controla el estado en línea manualmente
   const cambiarEstadoLinea = (nuevoEstado) => {
     setEnLinea(nuevoEstado);
     if (socketRef.current) {
@@ -225,7 +219,6 @@ function ChatGeneral({ token, usuario }) {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      // No uses setMensajes aquí, el evento socket lo hará en tiempo real
     } catch {
       setError('No se pudo borrar el mensaje.');
     }
@@ -294,7 +287,6 @@ function ChatGeneral({ token, usuario }) {
           }
         `}
       </style>
-      {/* El botón de estado en línea ha sido eliminado */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}

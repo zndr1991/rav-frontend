@@ -4,7 +4,13 @@ import ChatPrivado from './ChatPrivado';
 import { io } from 'socket.io-client';
 import Toasts from './Toasts';
 
-function UserPanel({ token, usuario, socket }) {
+// Inicializa el socket UNA SOLA VEZ fuera del componente
+const socketInstance = io('http://localhost:3001', {
+  transports: ['websocket'],
+  autoConnect: true
+});
+
+function UserPanel({ token, usuario }) {
   const [activeTab, setActiveTab] = useState('perfil');
   const [sinLeerGeneral, setSinLeerGeneral] = useState(0);
   const [toasts, setToasts] = useState([]);
@@ -16,7 +22,7 @@ function UserPanel({ token, usuario, socket }) {
     const guardados = localStorage.getItem('privadosNoLeidos');
     return guardados ? JSON.parse(guardados) : {};
   });
-  const socketRef = useRef(socket);
+  const socketRef = useRef(socketInstance);
 
   const [enLinea, setEnLinea] = useState(
     localStorage.getItem(`enLinea_${usuario.id}`) === 'false' ? false : true
@@ -119,36 +125,30 @@ function UserPanel({ token, usuario, socket }) {
   };
 
   useEffect(() => {
-    if (!socketRef.current && usuario?.id && token) {
+    if (usuario?.id && token) {
       fetchSinLeerGeneral();
 
       const interval = setInterval(fetchSinLeerGeneral, 10000);
 
-      const socketInstance = io(process.env.REACT_APP_API_URL.replace('/api', ''), {
-        transports: ['websocket'],
-        autoConnect: true
-      });
-      socketRef.current = socketInstance;
-
-      socketInstance.emit('usuario-en-linea', {
+      socketRef.current.emit('usuario-en-linea', {
         usuario_id: usuario.id,
         nombre: usuario.nombre,
         enLinea: enLinea
       });
 
-      socketInstance.on('connect', () => {
-        socketInstance.emit('usuario-en-linea', {
+      socketRef.current.on('connect', () => {
+        socketRef.current.emit('usuario-en-linea', {
           usuario_id: usuario.id,
           nombre: usuario.nombre,
           enLinea: enLinea
         });
       });
 
-      socketInstance.on('usuarios-en-linea', (usuarios) => {
+      socketRef.current.on('usuarios-en-linea', (usuarios) => {
         setUsuariosEnLinea(usuarios);
       });
 
-      socketInstance.on('nuevo-mensaje', (mensaje) => {
+      socketRef.current.on('nuevo-mensaje', (mensaje) => {
         fetchSinLeerGeneral();
         if (mensaje.usuario_id !== usuario.id) {
           const nombreRemitente = mensaje.nombre_usuario || mensaje.nombre || mensaje.autor || 'Desconocido';
@@ -174,7 +174,7 @@ function UserPanel({ token, usuario, socket }) {
         }
       });
 
-      socketInstance.on('nuevo-mensaje-privado', (mensaje) => {
+      socketRef.current.on('nuevo-mensaje-privado', (mensaje) => {
         if (
           mensaje.destinatario_id === usuario.id &&
           (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
