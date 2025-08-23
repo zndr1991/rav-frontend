@@ -115,7 +115,10 @@ function SupervisorPanel({ token, usuario }) {
   }, []);
 
   const showToast = (title, body, mensajeId) => {
-    setToasts(prev => [...prev, { title, body, mensajeId }]);
+    setToasts(prev => {
+      if (prev.some(t => t.title === title && t.body === body)) return prev;
+      return [...prev, { title, body, mensajeId }];
+    });
     setTimeout(() => setToasts(prev => prev.slice(1)), 4000);
   };
 
@@ -146,10 +149,7 @@ function SupervisorPanel({ token, usuario }) {
         });
       });
 
-      socketRef.current.on('usuarios-en-linea', (usuarios) => {
-        setUsuariosEnLinea(usuarios);
-      });
-
+      socketRef.current.off('nuevo-mensaje');
       socketRef.current.on('nuevo-mensaje', (mensaje) => {
         fetchSinLeerGeneral();
         if (mensaje.usuario_id !== usuario.id) {
@@ -176,25 +176,27 @@ function SupervisorPanel({ token, usuario }) {
         }
       });
 
-socketRef.current.on('nuevo-mensaje-privado', async (mensaje) => {
-  if (
-    mensaje.destinatario_id === usuario.id &&
-    (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
-  ) {
-    try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      socketRef.current.on('nuevo-mensaje-privado', async (mensaje) => {
+        if (
+          mensaje.destinatario_id === usuario.id &&
+          (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
+        ) {
+          try {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.noLeidos) {
+              setPrivadosNoLeidos(data.noLeidos);
+            }
+          } catch {}
+        }
       });
-      const data = await res.json();
-      if (data.noLeidos) {
-        setPrivadosNoLeidos(data.noLeidos);
-      }
-    } catch {}
-  }
-});
 
       return () => {
         clearInterval(interval);
+        socketRef.current.off('nuevo-mensaje');
+        socketRef.current.off('nuevo-mensaje-privado');
       };
     }
   }, [usuario?.id, token, enLinea, destinatario, activeTab]);
@@ -213,6 +215,49 @@ socketRef.current.on('nuevo-mensaje-privado', async (mensaje) => {
   const cambiarEstadoLineaManual = () => {
     setEnLinea(prev => !prev);
   };
+
+  // --- CORRECCIÓN: useRef para usuariosEnLineaPrev ---
+  const usuariosEnLineaPrevRef = useRef([]);
+
+  useEffect(() => {
+    if (!usuario?.id) return;
+    const socket = socketRef.current;
+
+    const handleUsuariosEnLinea = (usuariosEnLineaActual) => {
+      const usuariosEnLineaPrev = usuariosEnLineaPrevRef.current;
+      if (usuariosEnLineaPrev.length > 0) {
+        // Usuarios que se desconectaron
+        const desconectados = usuariosEnLineaPrev.filter(
+          prevUser =>
+            !usuariosEnLineaActual.some(u => u.usuario_id === prevUser.usuario_id) &&
+            prevUser.usuario_id !== usuario.id &&
+            prevUser.manual
+        );
+        desconectados.forEach(user => {
+          showToast('Usuario desconectado', `${user.nombre} se ha desconectado`);
+        });
+
+        // Usuarios que se conectaron
+        const conectados = usuariosEnLineaActual.filter(
+          currUser =>
+            !usuariosEnLineaPrev.some(u => u.usuario_id === currUser.usuario_id) &&
+            currUser.usuario_id !== usuario.id &&
+            currUser.manual
+        );
+        conectados.forEach(user => {
+          showToast('Usuario conectado', `${user.nombre} se ha conectado`);
+        });
+      }
+      usuariosEnLineaPrevRef.current = usuariosEnLineaActual;
+      setUsuariosEnLinea(usuariosEnLineaActual);
+    };
+
+    socket.on('usuarios-en-linea', handleUsuariosEnLinea);
+
+    return () => {
+      socket.off('usuarios-en-linea', handleUsuariosEnLinea);
+    };
+  }, [usuario.id]);
 
   // Marcar mensajes privados como leídos en el backend
   const marcarMensajesPrivadosLeidos = async (remitenteId) => {
