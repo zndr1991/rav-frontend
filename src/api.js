@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL;
-const BASE_URL = "https://rav-backend.onrender.com";
+const BASE_URL = process.env.REACT_APP_API_URL;
 
 // Variable global para mantener la instancia del socket
 let socketInstance = null;
