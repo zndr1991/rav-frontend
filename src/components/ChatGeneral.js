@@ -10,6 +10,7 @@ const socketInstance = io('http://localhost:3001', {
 });
 
 function ChatGeneral({ token, usuario }) {
+  // Eliminado el código que borra la sesión al refrescar/cerrar la ventana
   const [mensajes, setMensajes] = useState([]);
   const [mensajeTexto, setMensajeTexto] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -54,16 +55,14 @@ function ChatGeneral({ token, usuario }) {
 
   useEffect(() => {
     socketRef.current.on('nuevo-mensaje', (mensaje) => {
-      // Evita duplicar el mensaje si tú lo enviaste
       if (mensaje.usuario_id === usuario.id) return;
-      // Evita duplicar si el mensaje ya existe en el estado
       setMensajes(prev => {
-         if (prev.some(m => m.id === mensaje.id)) return prev;
-         return [...prev, mensaje];
+        if (prev.some(m => m.id === mensaje.id)) return prev;
+        return [...prev, mensaje];
       });
       setAutoScroll(true);
-    });  
-    
+    });
+
     socketRef.current.on('mensaje-editado', (msgEditado) => {
       setMensajes(prev =>
         prev.map(m =>
@@ -72,32 +71,10 @@ function ChatGeneral({ token, usuario }) {
       );
     });
 
-    socketRef.current.on('usuarios-en-linea', (usuarios) => {
-      const prevUsuarios = usuariosEnLineaRef.current;
-      const desconectados = prevUsuarios.filter(
-        prev => !usuarios.some(u => u.usuario_id === prev.usuario_id)
-      );
-      desconectados.forEach(u => {
-        if (u.usuario_id !== usuario.id) {
-          toast.info(`${u.nombre} se ha desconectado`, {
-            position: 'top-right',
-            autoClose: 2500
-          });
-        }
+      socketRef.current.on('usuarios-en-linea', (usuarios) => {
+        setUsuariosEnLinea(usuarios);
+        usuariosEnLineaRef.current = usuarios;
       });
-      const nuevos = usuarios.filter(u =>
-        !prevUsuarios.some(prev => prev.usuario_id === u.usuario_id)
-        && u.usuario_id !== usuario.id
-      );
-      nuevos.forEach(u => {
-        toast.success(`${u.nombre} se ha conectado`, {
-          position: 'top-right',
-          autoClose: 2500
-        });
-      });
-      setUsuariosEnLinea(usuarios);
-      usuariosEnLineaRef.current = usuarios;
-    });
 
     socketRef.current.on('connect', () => {
       socketRef.current.emit('usuario-en-linea', {
@@ -117,11 +94,9 @@ function ChatGeneral({ token, usuario }) {
     });
 
     socketRef.current.on('mensaje-borrado', (mensajeId) => {
-      console.log('Recibido mensaje-borrado', mensajeId);
       setMensajes(prev => prev.filter(m => String(m.id) !== String(mensajeId)));
     });
 
-    // No desconectes el socket aquí
     return () => {};
   }, [token, usuario.id, usuario.nombre, enLinea]);
 
@@ -213,7 +188,7 @@ function ChatGeneral({ token, usuario }) {
       }
       setMensajeTexto('');
       setAutoScroll(true);
-      await fetchMensajes(); // Actualiza los mensajes después de enviar
+      await fetchMensajes();
     } catch {
       setError('No se pudo enviar el mensaje.');
     }

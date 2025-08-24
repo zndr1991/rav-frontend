@@ -13,6 +13,7 @@ const socketInstance = io('http://localhost:3001', {
 });
 
 function SupervisorPanel({ token, usuario }) {
+  // Eliminado el código que borra la sesión al refrescar/cerrar la ventana
   const [usuarios, setUsuarios] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editId, setEditId] = useState(null);
@@ -225,29 +226,7 @@ function SupervisorPanel({ token, usuario }) {
 
     const handleUsuariosEnLinea = (usuariosEnLineaActual) => {
       const usuariosEnLineaPrev = usuariosEnLineaPrevRef.current;
-      if (usuariosEnLineaPrev.length > 0) {
-        // Usuarios que se desconectaron
-        const desconectados = usuariosEnLineaPrev.filter(
-          prevUser =>
-            !usuariosEnLineaActual.some(u => u.usuario_id === prevUser.usuario_id) &&
-            prevUser.usuario_id !== usuario.id &&
-            prevUser.manual
-        );
-        desconectados.forEach(user => {
-          showToast('Usuario desconectado', `${user.nombre} se ha desconectado`);
-        });
-
-        // Usuarios que se conectaron
-        const conectados = usuariosEnLineaActual.filter(
-          currUser =>
-            !usuariosEnLineaPrev.some(u => u.usuario_id === currUser.usuario_id) &&
-            currUser.usuario_id !== usuario.id &&
-            currUser.manual
-        );
-        conectados.forEach(user => {
-          showToast('Usuario conectado', `${user.nombre} se ha conectado`);
-        });
-      }
+    // Eliminadas notificaciones toast de conexión/desconexión
       usuariosEnLineaPrevRef.current = usuariosEnLineaActual;
       setUsuariosEnLinea(usuariosEnLineaActual);
     };
