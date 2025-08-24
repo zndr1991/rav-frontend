@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL;
-const BASE_URL = process.env.REACT_APP_API_URL;
+const BASE_URL = process.env.REACT_APP_API_URL; // Para WebSocket y archivos
+const API_URL = process.env.REACT_APP_API_URL + "/api"; // Para fetch HTTP
 
 // Variable global para mantener la instancia del socket
 let socketInstance = null;
