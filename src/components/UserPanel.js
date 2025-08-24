@@ -253,7 +253,7 @@ function UserPanel({ token, usuario }) {
     });
   };
 
-  // --- CORRECCIÓN: useRef para usuariosEnLineaPrev ---
+  // --- CORRECCIÓN: useRef para usuariosEneaPrev ---
   const usuariosEnLineaPrevRef = useRef([]);
 
   useEffect(() => {
