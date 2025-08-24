@@ -127,6 +127,26 @@ function SupervisorPanel({ token, usuario }) {
   };
 
   const handleToastClick = (mensajeId) => {
+    // Buscar el toast correspondiente
+    const toast = toasts.find(t => t.mensajeId === mensajeId);
+    // Si es mensaje privado, buscar el remitente
+    if (toast && toast.title && toast.title.startsWith('Mensaje privado de')) {
+      // Extraer nombre del remitente del título
+      const nombreRemitente = toast.title.replace('Mensaje privado de ', '').trim();
+      // Buscar usuario por nombre
+      const usuarioRemitente = usuariosTodos.find(u => (u.nombre || u.email) === nombreRemitente);
+      if (usuarioRemitente) {
+        setDestinatario(usuarioRemitente);
+        setActiveTabPersist('chat-privado');
+        localStorage.setItem('supervisorActiveTab', 'chat-privado');
+        localStorage.setItem('supervisorChatPrivadoDestinatario', JSON.stringify(usuarioRemitente));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensajeId }));
+        }, 300);
+        return;
+      }
+    }
+    // Si no es privado o no se encontró el usuario, ir al chat general
     setActiveTabPersist('chat-general');
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensajeId }));
@@ -194,6 +214,24 @@ function SupervisorPanel({ token, usuario }) {
               setPrivadosNoLeidos(data.noLeidos);
             }
           } catch {}
+            // Mostrar toast de mensaje privado recibido
+            const nombreRemitente = mensaje.nombre_remitente || mensaje.nombre || mensaje.autor || 'Desconocido';
+            showToast(`Mensaje privado de ${nombreRemitente}`, mensaje.texto, mensaje.id);
+            // Notificación nativa opcional
+            if (window.Notification && Notification.permission === 'granted') {
+              const noti = new Notification(`Mensaje privado de ${nombreRemitente}`, {
+                body: mensaje.texto,
+                icon: '/icono.png'
+              });
+              noti.onclick = () => {
+                setActiveTabPersist('chat-privado');
+                setTimeout(() => {
+                  window.focus();
+                  window.dispatchEvent(new CustomEvent('ir-a-mensaje', { detail: mensaje.id }));
+                }, 200);
+                noti.close();
+              };
+            }
         }
       });
 
