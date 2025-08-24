@@ -28,7 +28,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
     setError('');
     try {
       const res = await fetch(
-        `${process.env.REACT_APP_API_URL}/chat/private?usuario_id=${usuario.id}&destinatario_id=${destinatario.id}`,
+        `${process.env.REACT_APP_API_URL}/api/chat/private?usuario_id=${usuario.id}&destinatario_id=${destinatario.id}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
       const data = await res.json();
