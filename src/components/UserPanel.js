@@ -5,10 +5,13 @@ import { io } from 'socket.io-client';
 import Toasts from './Toasts';
 
 // Inicializa el socket UNA SOLA VEZ fuera del componente
-const socketInstance = io('http://localhost:3001', {
-  transports: ['websocket'],
-  autoConnect: true
-});
+const socketInstance = io(
+  process.env.REACT_APP_API_URL.replace('/api', ''),
+  {
+    transports: ['websocket', 'polling'],
+    autoConnect: true
+  }
+);
 
 function UserPanel({ token, usuario }) {
   // Eliminado el código que borra la sesión al refrescar/cerrar la ventana
@@ -47,7 +50,7 @@ function UserPanel({ token, usuario }) {
   useEffect(() => {
     const fetchNoLeidosPrivados = async () => {
       try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/unread/${usuario.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -68,7 +71,7 @@ function UserPanel({ token, usuario }) {
 
   const fetchSinLeerGeneral = async () => {
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/unread/${usuario.id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group/unread/${usuario.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -80,7 +83,7 @@ function UserPanel({ token, usuario }) {
 
   const fetchUsuarios = async () => {
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -175,7 +178,7 @@ function UserPanel({ token, usuario }) {
           (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
         ) {
           try {
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/unread/${usuario.id}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -235,7 +238,7 @@ function UserPanel({ token, usuario }) {
 
   const marcarMensajesPrivadosLeidos = async (remitenteId) => {
     try {
-      await fetch(`${process.env.REACT_APP_API_URL}/chat/private/read`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -268,7 +271,7 @@ function UserPanel({ token, usuario }) {
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
     try {
-      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/visit`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group/visit`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

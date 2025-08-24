@@ -7,10 +7,13 @@ import Toasts from './Toasts';
 const initialForm = { nombre: '', email: '', password: '', rol: 'usuario' };
 
 // Inicializa el socket UNA SOLA VEZ fuera del componente
-const socketInstance = io('http://localhost:3001', {
-  transports: ['websocket'],
-  autoConnect: true
-});
+const socketInstance = io(
+  process.env.REACT_APP_API_URL.replace('/api', ''),
+  {
+    transports: ['websocket', 'polling'],
+    autoConnect: true
+  }
+);
 
 function SupervisorPanel({ token, usuario }) {
   // Eliminado el código que borra la sesión al refrescar/cerrar la ventana
@@ -52,7 +55,7 @@ function SupervisorPanel({ token, usuario }) {
   useEffect(() => {
     const fetchNoLeidosPrivados = async () => {
       try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/unread/${usuario.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -73,7 +76,7 @@ function SupervisorPanel({ token, usuario }) {
 
   const fetchUsuarios = async () => {
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/users`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -94,7 +97,7 @@ function SupervisorPanel({ token, usuario }) {
 
   const fetchSinLeerGeneral = async () => {
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/unread/${usuario.id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group/unread/${usuario.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -183,7 +186,7 @@ function SupervisorPanel({ token, usuario }) {
           (!destinatario || destinatario.id !== mensaje.remitente_id || activeTab !== 'chat-privado')
         ) {
           try {
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/unread/${usuario.id}`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/unread/${usuario.id}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -241,7 +244,7 @@ function SupervisorPanel({ token, usuario }) {
   // Marcar mensajes privados como leídos en el backend
   const marcarMensajesPrivadosLeidos = async (remitenteId) => {
     try {
-      await fetch(`${process.env.REACT_APP_API_URL}/chat/private/read`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -277,8 +280,8 @@ function SupervisorPanel({ token, usuario }) {
     setError('');
     try {
       const url = editId
-        ? `${process.env.REACT_APP_API_URL}/users/${editId}`
-        : `${process.env.REACT_APP_API_URL}/users/register`;
+        ? `${process.env.REACT_APP_API_URL}/api/users/${editId}`
+        : `${process.env.REACT_APP_API_URL}/api/users/register`;
       const method = editId ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -304,7 +307,7 @@ function SupervisorPanel({ token, usuario }) {
   const handleDelete = async (id) => {
     if (window.confirm('¿Seguro que quieres borrar este usuario?')) {
       try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/users/${id}`, {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -451,7 +454,7 @@ function SupervisorPanel({ token, usuario }) {
   const handleChatGeneralClick = async () => {
     setActiveTabPersist('chat-general');
     try {
-      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/visit`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group/visit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

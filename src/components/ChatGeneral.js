@@ -4,10 +4,13 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Inicializa el socket UNA SOLA VEZ fuera del componente
-const socketInstance = io('http://localhost:3001', {
-  transports: ['websocket'],
-  autoConnect: true
-});
+const socketInstance = io(
+  process.env.REACT_APP_API_URL.replace('/api', ''),
+  {
+    transports: ['websocket', 'polling'],
+    autoConnect: true
+  }
+);
 
 function ChatGeneral({ token, usuario }) {
   // Eliminado el código que borra la sesión al refrescar/cerrar la ventana
@@ -36,7 +39,7 @@ function ChatGeneral({ token, usuario }) {
     setCargando(true);
     setError('');
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -169,7 +172,7 @@ function ChatGeneral({ token, usuario }) {
     if (!texto) return;
     setError('');
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -197,7 +200,7 @@ function ChatGeneral({ token, usuario }) {
   const borrarMensaje = async (id) => {
     if (!window.confirm('¿Seguro que quieres borrar este mensaje?')) return;
     try {
-      await fetch(`${process.env.REACT_APP_API_URL}/chat/group/${id}`, {
+      await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -220,7 +223,7 @@ function ChatGeneral({ token, usuario }) {
   const guardarEdicion = async (id) => {
     if (!editandoTexto.trim()) return;
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/group/${id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/group/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

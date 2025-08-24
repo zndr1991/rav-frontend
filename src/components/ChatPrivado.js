@@ -46,7 +46,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
     setNoLeidos(0);
     // Marca como leídos en el backend al abrir el chat
     if (destinatario?.id) {
-      fetch(`${process.env.REACT_APP_API_URL}/chat/private/read`, {
+      fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,7 +177,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
     if (!texto) return;
     setError('');
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -204,7 +204,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
   const borrarMensaje = async (id) => {
     if (!window.confirm('¿Seguro que quieres borrar este mensaje?')) return;
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/${id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -233,7 +233,7 @@ function ChatPrivado({ token, usuario, socket, destinatario, onVolver }) {
   const guardarEdicion = async (id) => {
     if (!editandoTexto.trim()) return;
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/chat/private/${id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/private/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

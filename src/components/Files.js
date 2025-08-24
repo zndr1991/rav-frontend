@@ -47,7 +47,7 @@ export default function Files({ token }) {
             {a.nombre_original} ({a.autor}) - {new Date(a.fecha).toLocaleString()}
             {" "}
             <a
-              href={`${process.env.REACT_APP_API_URL}/files/download/${a.id}`}
+              href={`${process.env.REACT_APP_API_URL}/api/files/download/${a.id}`}
               target="_blank"
               rel="noopener noreferrer"
             >
