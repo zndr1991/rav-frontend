@@ -1,7 +1,26 @@
 import { io } from 'socket.io-client';
 
-const BASE_URL = process.env.REACT_APP_API_URL; // Para WebSocket y archivos
-const API_URL = process.env.REACT_APP_API_URL + "/api"; // Para fetch HTTP
+
+// URLs para fallback
+const REMOTE_BACKEND_URL = "https://rav-backend.onrender.com";
+const LOCAL_BACKEND_URL = "http://localhost:3001";
+
+// Intenta primero localhost, si falla usa Render
+export async function fetchWithFallback(path, options = {}) {
+  try {
+    // Intentar con localhost
+    const res = await fetch(`${LOCAL_BACKEND_URL}/api${path}`, options);
+    if (!res.ok) throw new Error('Localhost error');
+    return res;
+  } catch (err) {
+    // Si falla, intenta con Render
+    return fetch(`${REMOTE_BACKEND_URL}/api${path}`, options);
+  }
+}
+
+// Para compatibilidad con el resto del código
+const BASE_URL = LOCAL_BACKEND_URL; // Para WebSocket y archivos
+const API_URL = LOCAL_BACKEND_URL + "/api"; // Para fetch HTTP
 
 let socketInstance = null;
 
@@ -58,7 +77,7 @@ export const initSocket = (token) => {
       console.log("Detalles adicionales:", err);
       
       // Intento de diagnóstico
-      fetch(`${API_URL}/verify-token`, {
+  fetchWithFallback('/verify-token', {
         headers: { Authorization: `Bearer ${cleanToken}` }
       })
       .then(res => res.json())
@@ -113,7 +132,7 @@ export const reconnectSocket = (token) => {
 // Verificar explícitamente un token
 export async function verifyToken(token) {
   try {
-    const res = await fetch(`${API_URL}/verify-token`, {
+  const res = await fetchWithFallback('/verify-token', {
       headers: { Authorization: `Bearer ${token}` }
     });
     return await res.json();
@@ -124,7 +143,7 @@ export async function verifyToken(token) {
 }
 
 export async function login(email, password) {
-  const res = await fetch(`${API_URL}/users/login`, {
+  const res = await fetchWithFallback('/users/login', {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -141,7 +160,7 @@ export async function login(email, password) {
 }
 
 export async function register(nombre, email, password, rol) {
-  const res = await fetch(`${API_URL}/users/register`, {
+  const res = await fetchWithFallback('/users/register', {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nombre, email, password, rol }),
@@ -151,7 +170,7 @@ export async function register(nombre, email, password, rol) {
 
 export async function fetchChat(token) {
   try {
-    const res = await fetch(`${API_URL}/chat/general`, {
+  const res = await fetchWithFallback('/chat/general', {
       headers: { Authorization: "Bearer " + token },
     });
     return res.json();
@@ -173,7 +192,7 @@ export async function sendMessage(mensaje, token, archivos = []) {
         formData.append("archivos", archivos[0]);
       }
       
-      const res = await fetch(`${API_URL}/chat/general`, {
+  const res = await fetchWithFallback('/chat/general', {
         method: "POST",
         headers: {
           Authorization: "Bearer " + token,
@@ -193,7 +212,7 @@ export async function sendMessage(mensaje, token, archivos = []) {
     primerFormData.append("de_usuario", "1");
     primerFormData.append("archivos", archivos[0]);
     
-    const respuestaPrimero = await fetch(`${API_URL}/chat/general`, {
+  const respuestaPrimero = await fetchWithFallback('/chat/general', {
       method: "POST",
       headers: { Authorization: "Bearer " + token },
       body: primerFormData,
@@ -207,7 +226,7 @@ export async function sendMessage(mensaje, token, archivos = []) {
       otroFormData.append("de_usuario", "1");
       otroFormData.append("archivos", archivos[i]);
       
-      const respuesta = await fetch(`${API_URL}/chat/general`, {
+  const respuesta = await fetchWithFallback('/chat/general', {
         method: "POST",
         headers: { Authorization: "Bearer " + token },
         body: otroFormData,
@@ -231,7 +250,7 @@ export async function sendMessage(mensaje, token, archivos = []) {
 // Obtener lista de usuarios
 export async function getUsers(token) {
   try {
-    const res = await fetch(`${API_URL}/users`, {
+  const res = await fetchWithFallback('/users', {
       headers: { Authorization: "Bearer " + token },
     });
     return await res.json();
@@ -244,7 +263,7 @@ export async function getUsers(token) {
 // Obtener usuarios en línea
 export async function getOnlineUsers() {
   try {
-    const res = await fetch(`${API_URL}/users/online`);
+  const res = await fetchWithFallback('/users/online');
     return await res.json();
   } catch (error) {
     console.error("Error al obtener usuarios en línea:", error);
@@ -253,7 +272,7 @@ export async function getOnlineUsers() {
 }
 
 export async function deleteMessage(id, token) {
-  const res = await fetch(`${API_URL}/chat/general/${id}`, {
+  const res = await fetchWithFallback(`/chat/general/${id}`, {
     method: "DELETE",
     headers: { Authorization: "Bearer " + token }
   });
@@ -262,7 +281,7 @@ export async function deleteMessage(id, token) {
 
 // Eliminar un archivo adjunto específico
 export async function deleteFile(id, token) {
-  const res = await fetch(`${API_URL}/chat/archivo/${id}`, {
+  const res = await fetchWithFallback(`/chat/archivo/${id}`, {
     method: "DELETE",
     headers: { Authorization: "Bearer " + token }
   });
@@ -270,7 +289,7 @@ export async function deleteFile(id, token) {
 }
 
 export async function editMessage(id, mensaje, token) {
-  const res = await fetch(`${API_URL}/chat/general/${id}`, {
+  const res = await fetchWithFallback(`/chat/general/${id}`, {
     method: "PUT",
     headers: {
       Authorization: "Bearer " + token,
@@ -282,7 +301,7 @@ export async function editMessage(id, mensaje, token) {
 }
 
 export async function fetchFiles(token) {
-  const res = await fetch(`${API_URL}/files/`, {
+  const res = await fetchWithFallback('/files/', {
     headers: { Authorization: "Bearer " + token },
   });
   return res.json();
@@ -292,7 +311,7 @@ export async function uploadFile(file, token) {
   const formData = new FormData();
   formData.append("archivo", file);
 
-  const res = await fetch(`${API_URL}/files/upload`, {
+  const res = await fetchWithFallback('/files/upload', {
     method: "POST",
     headers: { Authorization: "Bearer " + token },
     body: formData,
@@ -315,7 +334,7 @@ export async function testFileUpload(token, archivos = []) {
       formData.append("archivos", archivo);
     });
     
-    const res = await fetch(`${API_URL}/chat/test-upload`, {
+  const res = await fetchWithFallback('/chat/test-upload', {
       method: "POST",
       headers: {
         Authorization: "Bearer " + token
@@ -332,7 +351,7 @@ export async function testFileUpload(token, archivos = []) {
 
 // Subir adjunto a mensaje privado
 export async function subirAdjuntoPrivado(formData, token) {
-  const res = await fetch(`${API_URL}/chat/privado/subir-adjunto`, {
+  const res = await fetchWithFallback('/chat/privado/subir-adjunto', {
     method: "POST",
     headers: {
       Authorization: "Bearer " + token
@@ -344,7 +363,7 @@ export async function subirAdjuntoPrivado(formData, token) {
 
 // Eliminar adjunto de mensaje privado
 export async function eliminarAdjuntoPrivado({ mensajeId, adjuntoIdx }, token) {
-  const res = await fetch(`${API_URL}/chat/privado/eliminar-adjunto`, {
+  const res = await fetchWithFallback('/chat/privado/eliminar-adjunto', {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
