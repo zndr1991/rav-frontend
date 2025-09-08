@@ -1,0 +1,16 @@
+{
+  "extends": null,
+  "appId": "com.rav.autopartes",
+  "productName": "RAV",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "build/**/*",
+    "main.js",
+    "package.json"
+  ],
+  "win": {
+    "target": "nsis"
+  }
+}
